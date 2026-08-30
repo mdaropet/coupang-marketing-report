@@ -1,4 +1,4 @@
-// Vercel production deployment trigger: 2026-08-30
+// Vercel production deployment trigger: 2026-08-30 connected
 export default function Home() {
   return (
     <main className="dashboard-shell">
