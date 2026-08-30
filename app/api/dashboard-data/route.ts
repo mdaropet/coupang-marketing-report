@@ -164,12 +164,7 @@ async function fetchSheet(gid: string): Promise<Row[]> {
   return parseCsv(await response.text());
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  if (!url.searchParams.has("enhancement")) {
-    return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
-  }
-
+export async function GET() {
   try {
     const [monthly, brand, item, ratio, budget, deduction, accountingRows] = await Promise.all([
       fetchSheet(GIDS.monthly), fetchSheet(GIDS.brand), fetchSheet(GIDS.item), fetchSheet(GIDS.ratio), fetchSheet(GIDS.budget), fetchSheet(GIDS.deduction), fetchSheet(GIDS.accounting),
@@ -195,6 +190,7 @@ export async function GET(request: Request) {
     const deductionTotal = deduction.at(-1) || [];
     const eventDeduction = Array.from({ length: 12 }, (_, index) => index >= 3 && index <= 7 ? num(deductionTotal[index - 1]) : 0);
     const data = {
+      source: "Google Sheets",
       status: Array.from({ length: 12 }, (_, index) => clean(statusRow?.[MONTH_START + index]) || (index <= 7 ? "실적" : "예상")),
       rocketGmv: months(rocketRow),
       wingGmv: months(findRow(monthly, "쿠팡 윙 GMV")),
