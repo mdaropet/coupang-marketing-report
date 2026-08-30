@@ -164,7 +164,12 @@ async function fetchSheet(gid: string): Promise<Row[]> {
   return parseCsv(await response.text());
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  if (!url.searchParams.has("enhancement")) {
+    return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
+  }
+
   try {
     const [monthly, brand, item, ratio, budget, deduction, accountingRows] = await Promise.all([
       fetchSheet(GIDS.monthly), fetchSheet(GIDS.brand), fetchSheet(GIDS.item), fetchSheet(GIDS.ratio), fetchSheet(GIDS.budget), fetchSheet(GIDS.deduction), fetchSheet(GIDS.accounting),
@@ -222,7 +227,13 @@ export async function GET() {
       adPerformanceByBrand,
       refreshedAt: new Date().toISOString(),
       sourceMap: {
-        monthly: { gid: GIDS.monthly, rows: "3-20" }, brand: { gid: GIDS.brand, rows: "2-86" }, item: { gid: GIDS.item, rows: "3-160" }, ratio: { gid: GIDS.ratio, rows: "2-16" }, budget: { gid: GIDS.budget, rows: "2-12" }, deduction: { gid: GIDS.deduction, rows: "2-38" }, accounting: { gid: GIDS.accounting, rows: "2-9" },
+        monthly: { gid: GIDS.monthly, rows: "3-20" },
+        brand: { gid: GIDS.brand, rows: "2-86" },
+        item: { gid: GIDS.item, rows: "3-160" },
+        ratio: { gid: GIDS.ratio, rows: "2-16" },
+        budget: { gid: GIDS.budget, rows: "2-12" },
+        deduction: { gid: GIDS.deduction, rows: "2-38" },
+        accounting: { gid: GIDS.accounting, rows: "2-9" },
       },
     };
     if (!data.rocketGmv.some(Boolean) || !data.totalGmv.some(Boolean)) throw new Error("필수 월별 GMV 데이터를 찾지 못했습니다.");
