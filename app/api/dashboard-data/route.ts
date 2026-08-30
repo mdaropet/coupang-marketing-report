@@ -164,7 +164,12 @@ async function fetchSheet(gid: string): Promise<Row[]> {
   return parseCsv(await response.text());
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  if (!url.searchParams.has("enhancement")) {
+    return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
+  }
+
   try {
     const [monthly, brand, item, ratio, budget, deduction, accountingRows] = await Promise.all([
       fetchSheet(GIDS.monthly), fetchSheet(GIDS.brand), fetchSheet(GIDS.item), fetchSheet(GIDS.ratio), fetchSheet(GIDS.budget), fetchSheet(GIDS.deduction), fetchSheet(GIDS.accounting),
