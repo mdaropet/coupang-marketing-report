@@ -160,6 +160,7 @@
     const style = document.createElement("style");
     style.id = "event-spend-live-style";
     style.textContent = `
+      .event-spend-panel .event-live-wrap{margin:8px 0 18px}
       .event-spend-panel .event-live-list{display:grid;gap:10px;margin-top:14px}
       .event-spend-panel .event-live-row{display:grid;grid-template-columns:150px minmax(0,1fr) 90px;align-items:center;gap:12px}
       .event-spend-panel .event-live-name{color:#526176;font-size:11px;font-weight:850}
@@ -193,7 +194,6 @@
     const total = rows.reduce((sum, item) => sum + item.value, 0);
     const totalNode = panel.querySelector(".event-total");
     if (totalNode) totalNode.textContent = `${monthIndex + 1}월 합계 ${Math.round(total / 1000).toLocaleString("ko-KR")}천원`;
-    const unit = panel.querySelector(".unit");
     const wrap = document.createElement("div");
     wrap.className = "event-live-wrap";
     if (!rows.length) {
@@ -205,7 +205,8 @@
         return `<div class="event-live-row"><span class="event-live-name">${item.name}</span><div class="event-live-track"><i class="event-live-bar" style="width:${width}%"></i></div><strong class="event-live-value">${Math.round(item.value / 1000).toLocaleString("ko-KR")}</strong></div>`;
       }).join("")}</div><div class="event-live-summary"><span>${monthIndex + 1}월 행사별 매출차감 합계</span><strong>${Math.round(total / 1000).toLocaleString("ko-KR")}천원</strong></div>`;
     }
-    unit ? unit.insertAdjacentElement("beforebegin", wrap) : panel.append(wrap);
+    const heading = panel.querySelector(":scope > .panel-heading") || panel.querySelector(":scope > .section-heading") || panel.querySelector("h2")?.parentElement;
+    heading ? heading.insertAdjacentElement("afterend", wrap) : panel.prepend(wrap);
   };
 
   const apply = () => {
