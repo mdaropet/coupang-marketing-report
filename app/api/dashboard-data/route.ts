@@ -180,7 +180,30 @@ function parseAdBlock(rows: Row[], brand: string): AdPerformance {
 }
 function parseEventBreakdown(rows: Row[]) {
   const names = ["1. 펫페어", "2. 펫페스티벌", "3. 타임프로모션", "4. 골드박스", "5. 자체프로모션", "6. 펫용품위크", "7. 펫푸드위크"];
-  return names.map((name) => ({ name, values: months(findRow(rows, name)) }));
+  const header = rows.find((row) => normalize(row[0]) === "매출차감") || [];
+  const monthColumns = header
+    .map((cell, column) => ({ index: monthIndex(cell), column }))
+    .filter(({ index }) => index >= 0);
+
+  return names.map((name, categoryIndex) => {
+    const values = emptyNum();
+    const start = rows.findIndex((row) => normalize(row[0]) === normalize(name));
+    if (start < 0) return { name, values };
+
+    let end = rows.length;
+    for (const nextName of names.slice(categoryIndex + 1)) {
+      const next = rows.findIndex((row, rowIndex) => rowIndex > start && normalize(row[0]) === normalize(nextName));
+      if (next >= 0) { end = Math.min(end, next); break; }
+    }
+
+    for (let rowIndex = start; rowIndex < end; rowIndex += 1) {
+      const row = rows[rowIndex];
+      const isTotalRow = !clean(row[0]) && !clean(row[1]) && monthColumns.some(({ column }) => num(row[column]) !== 0);
+      if (isTotalRow) continue;
+      monthColumns.forEach(({ index, column }) => { values[index] += num(row[column]); });
+    }
+    return { name, values };
+  });
 }
 async function fetchSheet(gid: string): Promise<Row[]> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&_=${Date.now()}`;
