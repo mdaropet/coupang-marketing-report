@@ -63,7 +63,7 @@ export default function Home() {
       applyAdjustments();
       observer?.disconnect();
       observer = new MutationObserver(applyAdjustments);
-      observer.observe(doc.body, { childList: true, subtree: true, characterData: true });
+      observer.observe(doc.body, { childList: true, subtree: true });
     };
 
     frame.addEventListener("load", install);
