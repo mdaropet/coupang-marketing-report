@@ -136,18 +136,16 @@
   };
   const ensureAdSection = () => {
     const panel = document.querySelector(".brand-trend-panel");
-    const host = panel?.querySelector(":scope > .ad-performance-summary");
-    if (!panel || !host) return;
+    if (!panel) return;
     const selected = document.querySelector(".report-brand-select")?.value?.trim() || "";
     const visible = panel.classList.contains("report-item-summary") && Boolean(selected && !selected.includes("전체"));
     const rows = visible ? rowsForBrand(selected) : [];
-    let section = host.querySelector(":scope > .custom-ad-ops");
+    let section = panel.querySelector(":scope > .custom-ad-ops");
     if (!section && visible) {
       section = document.createElement("section");
       section.className = "custom-ad-ops";
-      host.append(section);
+      panel.append(section);
     }
-    host.classList.toggle("report-ad-host-active", visible);
     if (!section) return;
     const signature=JSON.stringify([selected,rows]);
     if(section.dataset.signature!==signature){
