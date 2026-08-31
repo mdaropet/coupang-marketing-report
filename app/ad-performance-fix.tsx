@@ -92,7 +92,10 @@ export default function AdPerformanceFix() {
       const style = doc.createElement("style");
       style.id = "safe-ad-performance-style";
       style.textContent = `
-        .custom-ad-ops{display:none!important}
+        .brand-trend-panel .custom-ad-ops,
+        .brand-trend-panel .ad-performance-summary,
+        .brand-trend-panel .ad-performance-inline{display:none!important}
+        .brand-trend-panel .safe-ad-ops{display:block!important}
         .safe-ad-ops{margin-top:18px;padding:18px;border:1px solid #dfe7f1;border-radius:14px;background:#f8faff}
         .safe-ad-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}.safe-ad-head p{margin:0 0 4px;color:#718096;font-size:9px;font-weight:900;letter-spacing:.08em}.safe-ad-head h3{margin:0;color:#10203d;font-size:18px}.safe-ad-head>span{color:#718096;font-size:10px;font-weight:800}
         .safe-ad-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:12px}.safe-ad-kpis article{background:#fff;border:1px solid #e2eaf5;border-radius:11px;padding:12px}.safe-ad-kpis span{display:block;color:#718096;font-size:9px;font-weight:800}.safe-ad-kpis strong{display:block;margin-top:5px;color:#10203d;font-size:15px}
