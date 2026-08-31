@@ -65,7 +65,7 @@ function months(row?: Row) { return Array.from({ length: MONTH_COUNT }, (_, inde
 function emptyText() { return Array.from({ length: MONTH_COUNT }, () => ""); }
 function emptyNum() { return Array.from({ length: MONTH_COUNT }, () => 0); }
 function monthIndex(label: unknown) {
-  const match = clean(label).match(/(\d{1,2})월/);
+  const match = clean(label).match(/(?:26년\s*)?(\d{1,2})월/);
   return match ? Math.max(0, Math.min(11, Number(match[1]) - 1)) : -1;
 }
 function findRow(rows: Row[], first: string, second?: string) {
@@ -101,30 +101,38 @@ function collectRepeatedSections(rows: Row[], title: string): Series[] {
   }
   return result;
 }
+
 function parseMonthlyText(rows: Row[]): TextBlock {
   const summaries = emptyText();
   const plans = emptyText();
+  const headerIndex = rows.findIndex((row) => normalize(row[0]) === "구분" && normalize(row[1]) === "월");
+  const header = headerIndex >= 0 ? rows[headerIndex] : [];
+  const summaryColumn = header.findIndex((cell) => ["요약", "운영요약"].includes(normalize(cell)));
+  const planColumn = header.findIndex((cell) => ["계획", "향후계획", "영업계획"].includes(normalize(cell)));
   rows.forEach((row) => {
     if (normalize(row[0]) !== "쿠팡 월별 GMV") return;
     const index = monthIndex(row[1]);
     if (index < 0) return;
-    summaries[index] = clean(row[2]);
-    plans[index] = clean(row[3]);
+    summaries[index] = clean(row[summaryColumn >= 0 ? summaryColumn : 2]);
+    plans[index] = clean(row[planColumn >= 0 ? planColumn : 3]);
   });
   return { summaries, plans };
 }
-function parseSummaryBlock(rows: Row[], marker: string, summaryColumn = 2, planColumn = 5): TextBlock {
+function parseSummaryBlock(rows: Row[], marker: string): TextBlock {
   const summaries = emptyText();
   const plans = emptyText();
   const start = rows.findIndex((row) => normalize(row[0]) === normalize(marker));
   if (start < 0) return { summaries, plans };
+  const header = rows.slice(start + 1, start + 4).find((row) => row.some((cell) => normalize(cell) === "운영요약")) || [];
+  const summaryColumn = header.findIndex((cell) => normalize(cell) === "운영요약");
+  const planColumn = header.findIndex((cell) => ["영업계획", "운영계획", "향후계획"].includes(normalize(cell)));
   for (let i = start + 1; i < rows.length; i += 1) {
     const first = clean(rows[i][0]);
-    if (i > start + 1 && /운영요약\s*-/.test(first)) break;
+    if (i > start + 2 && /운영요약\s*-/.test(normalize(first))) break;
     const index = monthIndex(first);
     if (index < 0) continue;
-    summaries[index] = clean(rows[i][summaryColumn]);
-    plans[index] = clean(rows[i][planColumn]);
+    summaries[index] = clean(rows[i][summaryColumn >= 0 ? summaryColumn : 2]);
+    plans[index] = clean(rows[i][planColumn >= 0 ? planColumn : 5]);
   }
   return { summaries, plans };
 }
@@ -178,10 +186,31 @@ function parseAdBlock(rows: Row[], brand: string): AdPerformance {
   }
   return result;
 }
+
 function parseEventBreakdown(rows: Row[]) {
-  const names = ["1. 펫페어", "2. 펫페스티벌", "3. 타임프로모션", "4. 골드박스", "5. 자체프로모션", "6. 펫용품위크", "7. 펫푸드위크"];
-  return names.map((name) => ({ name, values: months(findRow(rows, name)) }));
+  const categoryNames = ["1. 펫페어", "2. 펫페스티벌", "3. 타임프로모션", "4. 골드박스", "5. 자체프로모션", "6. 펫용품위크", "7. 펫푸드위크"];
+  const headerIndex = rows.findIndex((row) => normalize(row[0]) === "매출차감");
+  const header = headerIndex >= 0 ? rows[headerIndex] : [];
+  const monthColumns = header.map((cell, column) => ({ index: monthIndex(cell), column })).filter(({ index }) => index >= 0);
+  const result = categoryNames.map((name) => ({ name, values: emptyNum() }));
+  let current = -1;
+  for (let i = Math.max(0, headerIndex + 1); i < rows.length; i += 1) {
+    const first = normalize(rows[i][0]);
+    const categoryIndex = categoryNames.findIndex((name) => normalize(name) === first);
+    if (categoryIndex >= 0) current = categoryIndex;
+    if (current < 0) continue;
+    const nextCategory = categoryNames.findIndex((name) => normalize(name) === first);
+    if (nextCategory >= 0) current = nextCategory;
+    monthColumns.forEach(({ index, column }) => {
+      result[current].values[index] += num(rows[i][column]);
+    });
+  }
+  return result;
 }
+function eventTotals(breakdown: { name: string; values: number[] }[]) {
+  return Array.from({ length: 12 }, (_, index) => breakdown.reduce((sum, row) => sum + (row.values[index] || 0), 0));
+}
+
 async function fetchSheet(gid: string): Promise<Row[]> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&_=${Date.now()}`;
   const response = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
@@ -212,6 +241,8 @@ export async function GET() {
       return { name, budget: num(row?.[3]), spent: num(row?.[4]) };
     });
     const budgetTotal = findRow(budget, "합계");
+    const eventBreakdown = parseEventBreakdown(deduction);
+    const deductionTotals = eventTotals(eventBreakdown);
     const data = {
       source: "Google Sheets",
       status: Array.from({ length: 12 }, (_, index) => clean(statusRow?.[MONTH_START + index]) || (index <= 7 ? "실적" : "예상")),
@@ -240,7 +271,8 @@ export async function GET() {
         eventDeduction: months(findRow(accountingRows, "쿠팡로켓", "매출차감행사비 - 쿠폰행사")),
         incentive: months(findRow(accountingRows, "쿠팡로켓", "매출차감행사비 - 판매장려금")),
       },
-      eventBreakdown: parseEventBreakdown(deduction),
+      eventDeduction: deductionTotals,
+      eventBreakdown,
       adPerformance: adPerformanceByBrand["잘싸모래"],
       adPerformanceByBrand,
     };
