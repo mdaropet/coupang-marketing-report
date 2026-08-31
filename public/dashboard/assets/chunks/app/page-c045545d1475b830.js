@@ -852,23 +852,13 @@
                     "8~12월 예상",
                   ],
                 }),
-                "잘싸모래" === s &&
-                  "GMV" === l &&
-                  (0, n.jsxs)("span", {
-                    children: [
-                      (0, n.jsx)("i", {
-                        className: "conversion-revenue-legend",
-                      }),
-                      "전환매출",
-                    ],
-                  }),
               ],
             }),
             (0, n.jsx)("p", {
               className: "chart-note",
               children:
                 "GMV" === l
-                  ? "단위: 천원 \xb7 기본 막대는 품목별 GMV, 보조 막대는 광고 전환매출입니다."
+                  ? "단위: 천원 \xb7 막대는 품목별 GMV입니다."
                   : "단위: 천원 \xb7 막대는 품목별 회계매출이며 8~12월 예상은 노란색입니다.",
             }),
           ],
