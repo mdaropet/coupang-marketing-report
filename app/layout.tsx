@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PreviewDashboardFix from "./preview-dashboard-fix";
 
 export const metadata: Metadata = {
   title: "쿠팡 실적 보고서",
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {children}
+        <PreviewDashboardFix />
+      </body>
     </html>
   );
 }
