@@ -46,11 +46,15 @@
     .map(line => line.replace(/\t+$/g, "").trim())
     .filter(Boolean);
   const operationContent = type => {
-    if (type !== "monthly" || !dashboardSnapshot) {
+    const liveMap = {
+      monthly: [dashboardSnapshot?.operationSummaries, dashboardSnapshot?.salesPlans],
+      brand: [dashboardSnapshot?.brandOperationSummaries, dashboardSnapshot?.brandSalesPlans],
+      marketing: [dashboardSnapshot?.marketingOperationSummaries, dashboardSnapshot?.marketingSalesPlans],
+    };
+    const [summaries, plans] = liveMap[type] || [];
+    if (!dashboardSnapshot || !Array.isArray(summaries) || !Array.isArray(plans)) {
       return { summary: operationCopy[type], plan: planCopy[type], month: "" };
     }
-    const summaries = dashboardSnapshot.operationSummaries || [];
-    const plans = dashboardSnapshot.salesPlans || [];
     const index = selectedIndexes()
       .filter(monthIndex => String(summaries[monthIndex] || plans[monthIndex] || "").trim())
       .at(-1);
@@ -80,10 +84,20 @@
     const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${content.month ? `${content.month} ${label}` : label}</strong><span>시트 입력값</span></div>${lines.map(line=>`<p>${line}</p>`).join("")}</article>`;
     grid.innerHTML=column("운영 요약",content.summary,"summary")+column("향후 계획",content.plan,"plan");
   };
+  const cleanBrandOperations = () => {
+    const panel = document.querySelector(".brand-trend-panel");
+    if (!panel) return;
+    const heading = panel.querySelector(":scope > .panel-heading h2");
+    if (heading) heading.textContent = "로켓 브랜드별 GMV";
+    panel.querySelectorAll(
+      ".brand-detail .operation-plan-grid, .brand-detail .operation-detail-card, .brand-detail .brand-operations-top, .brand-detail .gmv-operations-box, .brand-detail .brand-accounting-summary, .brand-accounting-block .operation-plan-grid, .brand-accounting-block .operation-detail-card, .brand-accounting-block .brand-operations-top, .brand-accounting-block .brand-accounting-summary"
+    ).forEach(node => node.remove());
+  };
   const moveOperations = () => {
     ensureOperationPlan(document.querySelector(".gmv-target-panel"),"monthly");
     ensureOperationPlan(document.querySelector(".brand-trend-panel"),"brand");
     ensureOperationPlan(document.querySelector(".hero-panel"),"marketing");
+    cleanBrandOperations();
   };
 
   let adRows = [];
@@ -146,7 +160,7 @@
     });
   };
   const apply = () => {
-    ensureStaticPreviewBadge(); moveOperations(); removeProductGmvAdMetrics(); ensureAdSection();
+    ensureStaticPreviewBadge(); moveOperations(); removeProductGmvAdMetrics(); ensureAdSection(); cleanBrandOperations();
   };
   window.addEventListener("load", () => setTimeout(apply, 1800), {once:true});
   document.addEventListener("change", event => { if (event.target.matches(".report-brand-select")) setTimeout(apply, 400); });
