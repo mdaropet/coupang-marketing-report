@@ -3,6 +3,7 @@ import "./globals.css";
 import MarketingOperationsFix from "./marketing-operations-fix";
 import BrandOperationsFix from "./brand-operations-fix";
 import ActualStatusFix from "./actual-status-fix";
+import ActualStatusPersistentStyle from "./actual-status-persistent-style";
 
 export const metadata: Metadata = {
   title: "쿠팡 실적 보고서",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <MarketingOperationsFix />
         <BrandOperationsFix />
         <ActualStatusFix />
+        <ActualStatusPersistentStyle />
       </body>
     </html>
   );
