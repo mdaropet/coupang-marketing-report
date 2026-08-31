@@ -19,10 +19,9 @@ export default function AdPerformanceFix() {
   useEffect(() => {
     let frame: HTMLIFrameElement | null = null;
     let data: Record<string, AdSeries> = {};
-    let retryTimer: ReturnType<typeof setInterval> | null = null;
-    let loadHandler: (() => void) | null = null;
-    let changeHandler: ((event: Event) => void) | null = null;
-    let clickHandler: ((event: Event) => void) | null = null;
+    let attachTimer: ReturnType<typeof setInterval> | null = null;
+    let renderTimer: ReturnType<typeof setInterval> | null = null;
+    let frameLoadHandler: (() => void) | null = null;
 
     const formatWon = (value: number) => `${new Intl.NumberFormat("ko-KR").format(value)}원`;
 
@@ -30,7 +29,9 @@ export default function AdPerformanceFix() {
       const selects = [...doc.querySelectorAll<HTMLSelectElement>(".range-filter select")];
       const start = Number(selects[0]?.value ?? 0);
       const end = Number(selects[1]?.value ?? 11);
-      return Array.from({ length: Math.max(0, end - start + 1) }, (_, offset) => start + offset);
+      const safeStart = Number.isFinite(start) ? Math.max(0, Math.min(11, start)) : 0;
+      const safeEnd = Number.isFinite(end) ? Math.max(safeStart, Math.min(11, end)) : 11;
+      return Array.from({ length: safeEnd - safeStart + 1 }, (_, offset) => safeStart + offset);
     };
 
     const rowsForBrand = (brand: string, doc: Document) => {
@@ -102,63 +103,54 @@ export default function AdPerformanceFix() {
     };
 
     const render = () => {
-      const doc = frame?.contentDocument;
-      if (!doc?.body) return;
-      ensureStyle(doc);
-      const detail = doc.querySelector<HTMLElement>(".brand-trend-panel .brand-detail");
-      if (!detail) return;
-      const brand = doc.querySelector<HTMLSelectElement>(".report-brand-select")?.value?.trim() || "";
-      const visible = Boolean(brand && !brand.includes("전체"));
-      let section = detail.querySelector<HTMLElement>(".safe-ad-ops");
-      if (!visible) {
-        section?.remove();
-        return;
+      try {
+        const doc = frame?.contentDocument;
+        if (!doc?.body) return;
+        ensureStyle(doc);
+        const detail = doc.querySelector<HTMLElement>(".brand-trend-panel .brand-detail");
+        if (!detail) return;
+        const brand = doc.querySelector<HTMLSelectElement>(".report-brand-select")?.value?.trim() || "";
+        const visible = Boolean(brand && !brand.includes("전체"));
+        let section = detail.querySelector<HTMLElement>(".safe-ad-ops");
+        if (!visible) {
+          section?.remove();
+          return;
+        }
+        if (!section) {
+          section = doc.createElement("section");
+          section.className = "safe-ad-ops";
+          detail.appendChild(section);
+        }
+        const rows = rowsForBrand(brand, doc);
+        const signature = JSON.stringify([brand, rows]);
+        if (section.dataset.signature === signature) return;
+        section.dataset.signature = signature;
+        const latest = rows.at(-1);
+        const month = latest?.month || "선택 월";
+        const valueOr = (value: number | undefined, formatter: (value: number) => string) => Number(value) ? formatter(Number(value)) : "입력 대기";
+        section.innerHTML = `<div class="safe-ad-head"><div><p>BRAND AD PERFORMANCE</p><h3>${brand} 광고 운영 성과</h3></div><span>광고비·전환매출·전환율·ROHS 월별 추이</span></div><div class="safe-ad-kpis"><article><span>${month} 광고비</span><strong>${valueOr(latest?.spend, formatWon)}</strong></article><article><span>${month} 전환매출</span><strong>${valueOr(latest?.revenue, formatWon)}</strong></article><article><span>${month} 전환율</span><strong>${valueOr(latest?.conversion, value => `${value.toFixed(1)}%`)}</strong></article><article><span>${month} ROHS</span><strong>${valueOr(latest?.rohs, value => `${value.toFixed(0)}%`)}</strong></article></div><div class="safe-ad-visual">${moneyChart(rows)}<div class="safe-ad-rate-stack">${rateChart(rows, "conversion", "전환율")}${rateChart(rows, "rohs", "ROHS")}</div></div>`;
+      } catch {
+        // 광고 성과 보정 실패가 기존 브랜드 선택 화면을 막지 않도록 격리합니다.
       }
-      if (!section) {
-        section = doc.createElement("section");
-        section.className = "safe-ad-ops";
-        detail.appendChild(section);
-      }
-      const rows = rowsForBrand(brand, doc);
-      const signature = JSON.stringify([brand, rows]);
-      if (section.dataset.signature === signature) return;
-      section.dataset.signature = signature;
-      const latest = rows.at(-1);
-      const month = latest?.month || "선택 월";
-      const valueOr = (value: number | undefined, formatter: (value: number) => string) => Number(value) ? formatter(Number(value)) : "입력 대기";
-      section.innerHTML = `<div class="safe-ad-head"><div><p>BRAND AD PERFORMANCE</p><h3>${brand} 광고 운영 성과</h3></div><span>광고비·전환매출·전환율·ROHS 월별 추이</span></div><div class="safe-ad-kpis"><article><span>${month} 광고비</span><strong>${valueOr(latest?.spend, formatWon)}</strong></article><article><span>${month} 전환매출</span><strong>${valueOr(latest?.revenue, formatWon)}</strong></article><article><span>${month} 전환율</span><strong>${valueOr(latest?.conversion, value => `${value.toFixed(1)}%`)}</strong></article><article><span>${month} ROHS</span><strong>${valueOr(latest?.rohs, value => `${value.toFixed(0)}%`)}</strong></article></div><div class="safe-ad-visual">${moneyChart(rows)}<div class="safe-ad-rate-stack">${rateChart(rows, "conversion", "전환율")}${rateChart(rows, "rohs", "ROHS")}</div></div>`;
     };
 
     const attach = () => {
       frame = document.querySelector<HTMLIFrameElement>(".dashboard-frame");
       const doc = frame?.contentDocument;
       if (!frame || !doc?.body) return false;
-      if (!changeHandler) {
-        changeHandler = event => {
-          const target = event.target as Element | null;
-          if (target?.matches(".report-brand-select, .range-filter select")) {
-            window.setTimeout(render, 120);
-            window.setTimeout(render, 450);
-          }
+
+      if (!frameLoadHandler) {
+        frameLoadHandler = () => {
+          window.setTimeout(render, 400);
+          window.setTimeout(render, 1000);
         };
-        doc.addEventListener("change", changeHandler, true);
+        frame.addEventListener("load", frameLoadHandler);
       }
-      if (!clickHandler) {
-        clickHandler = event => {
-          const target = event.target as Element | null;
-          if (target?.closest(".brand-chart-legend button, .brand-label-grid button")) window.setTimeout(render, 350);
-        };
-        doc.addEventListener("click", clickHandler, true);
-      }
-      if (!loadHandler) {
-        loadHandler = () => {
-          window.setTimeout(render, 200);
-          window.setTimeout(render, 700);
-        };
-        frame.addEventListener("load", loadHandler);
-      }
+
       render();
-      window.setTimeout(render, 500);
+      if (!renderTimer) {
+        renderTimer = setInterval(render, 600);
+      }
       return true;
     };
 
@@ -167,10 +159,10 @@ export default function AdPerformanceFix() {
       .then((payload: DashboardPayload) => {
         data = payload.data?.adPerformanceByBrand || {};
         if (!attach()) {
-          retryTimer = setInterval(() => {
-            if (attach() && retryTimer) {
-              clearInterval(retryTimer);
-              retryTimer = null;
+          attachTimer = setInterval(() => {
+            if (attach() && attachTimer) {
+              clearInterval(attachTimer);
+              attachTimer = null;
             }
           }, 300);
         }
@@ -178,11 +170,9 @@ export default function AdPerformanceFix() {
       .catch(() => {});
 
     return () => {
-      if (retryTimer) clearInterval(retryTimer);
-      const doc = frame?.contentDocument;
-      if (doc && changeHandler) doc.removeEventListener("change", changeHandler, true);
-      if (doc && clickHandler) doc.removeEventListener("click", clickHandler, true);
-      if (frame && loadHandler) frame.removeEventListener("load", loadHandler);
+      if (attachTimer) clearInterval(attachTimer);
+      if (renderTimer) clearInterval(renderTimer);
+      if (frame && frameLoadHandler) frame.removeEventListener("load", frameLoadHandler);
     };
   }, []);
 
