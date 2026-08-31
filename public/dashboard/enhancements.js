@@ -1,8 +1,17 @@
 (() => {
   let dashboardSnapshot = null;
-  fetch("/api/dashboard-data", { cache: "no-store" })
-    .then(response => response.ok ? response.json() : Promise.reject(new Error("dashboard data")))
-    .then(payload => { dashboardSnapshot = payload.data || null; setTimeout(apply, 0); })
+  Promise.all([
+    fetch("/api/dashboard-data", { cache: "no-store" }).then(response => response.ok ? response.json() : Promise.reject(new Error("dashboard data"))),
+    fetch("/api/monthly-operations", { cache: "no-store" }).then(response => response.ok ? response.json() : null).catch(() => null),
+  ])
+    .then(([payload, monthlyOperations]) => {
+      dashboardSnapshot = payload.data || null;
+      if (dashboardSnapshot && monthlyOperations) {
+        if (Array.isArray(monthlyOperations.summaries)) dashboardSnapshot.operationSummaries = monthlyOperations.summaries;
+        if (Array.isArray(monthlyOperations.plans)) dashboardSnapshot.salesPlans = monthlyOperations.plans;
+      }
+      setTimeout(apply, 0);
+    })
     .catch(() => {});
   const ensureStaticPreviewBadge = () => {
     const actions = document.querySelector(".topbar-actions");
