@@ -13,6 +13,8 @@ export default function ActualStatusFix() {
     let frameLoadHandler: (() => void) | null = null;
     let queued = false;
 
+    const actualPalette = ["#174ea6", "#2867f0", "#4384dc", "#5b99e6", "#78adeb", "#9bc5f2", "#b9d4f4"];
+
     const monthIndex = (value: unknown) => {
       const match = String(value || "").match(/(\d{1,2})월/);
       if (!match) return -1;
@@ -21,6 +23,19 @@ export default function ActualStatusFix() {
     };
 
     const isActual = (index: number) => String(status[index] || "").trim() === "실적";
+
+    const forceBlueSegments = (node: HTMLElement) => {
+      const direct = [...node.children].filter((child): child is HTMLElement => child instanceof HTMLElement);
+      const segments = direct.filter(child => {
+        if (["STRONG", "SPAN", "B", "SMALL", "EM"].includes(child.tagName)) return false;
+        return child.tagName === "BUTTON" || child.tagName === "I" || Boolean(child.style.background || child.style.backgroundColor);
+      });
+      segments.forEach((segment, segmentIndex) => {
+        const color = segment.tagName === "I" ? "#d6e5f7" : actualPalette[segmentIndex % actualPalette.length];
+        segment.style.setProperty("background", color, "important");
+        segment.style.setProperty("background-color", color, "important");
+      });
+    };
 
     const adjustSvgMonthGroups = (doc: Document) => {
       doc.querySelectorAll<SVGGElement>("svg g").forEach(group => {
@@ -49,10 +64,32 @@ export default function ActualStatusFix() {
       doc.querySelectorAll<HTMLElement>(".brand-month").forEach(node => {
         const index = monthIndex(node.querySelector(":scope > span:last-child")?.textContent || node.textContent);
         if (index < 0) return;
-        const shouldForecast = !isActual(index);
+        const actual = isActual(index);
+        const shouldForecast = !actual;
         if (node.classList.contains("forecast-brand-month") !== shouldForecast) {
           node.classList.toggle("forecast-brand-month", shouldForecast);
         }
+        if (actual) forceBlueSegments(node);
+      });
+    };
+
+    const adjustProductMonths = (doc: Document) => {
+      doc.querySelectorAll<HTMLElement>(".product-month").forEach(node => {
+        const index = monthIndex(
+          node.querySelector(":scope > strong")?.textContent ||
+          node.querySelector(":scope > span:last-child")?.textContent ||
+          node.textContent
+        );
+        if (index < 0 || !isActual(index)) return;
+        node.classList.remove("forecast-product-month", "forecast", "is-forecast");
+        node.classList.add("actual-product-month");
+        forceBlueSegments(node);
+        node.querySelectorAll<HTMLElement>("[style*='background']").forEach((segment, segmentIndex) => {
+          if (["STRONG", "SPAN", "B", "SMALL", "EM"].includes(segment.tagName)) return;
+          const color = actualPalette[segmentIndex % actualPalette.length];
+          segment.style.setProperty("background", color, "important");
+          segment.style.setProperty("background-color", color, "important");
+        });
       });
     };
 
@@ -115,7 +152,7 @@ export default function ActualStatusFix() {
     };
 
     const adjustCopy = (doc: Document) => {
-      doc.querySelectorAll<HTMLElement>(".brand-chart-guide span, .gmv-chart-guide span, .unit").forEach(node => {
+      doc.querySelectorAll<HTMLElement>(".brand-chart-guide span, .gmv-chart-guide span, .unit, .product-legend span").forEach(node => {
         const current = node.textContent || "";
         if (current.includes("8~12월 예상")) node.textContent = current.replace("8~12월 예상", "9~12월 예상");
       });
@@ -133,6 +170,7 @@ export default function ActualStatusFix() {
       if (!status.length || !doc?.body) return;
       adjustSvgMonthGroups(doc);
       adjustBrandMonths(doc);
+      adjustProductMonths(doc);
       adjustSpendMonths(doc);
       adjustAccountingMonths(doc);
       adjustPeriodBackground(doc);
@@ -140,10 +178,10 @@ export default function ActualStatusFix() {
     };
 
     const scheduleApply = (delay = 0) => {
-      if (queued) return;
-      queued = true;
+      if (queued && delay === 0) return;
+      if (delay === 0) queued = true;
       window.setTimeout(() => {
-        queued = false;
+        if (delay === 0) queued = false;
         requestAnimationFrame(apply);
       }, delay);
     };
@@ -156,13 +194,19 @@ export default function ActualStatusFix() {
       if (!rangeChangeHandler) {
         rangeChangeHandler = event => {
           const target = event.target as Element | null;
-          if (target?.matches(".range-filter select, .report-brand-select")) scheduleApply(180);
+          if (target?.matches(".range-filter select, .report-brand-select")) {
+            scheduleApply(180);
+            scheduleApply(550);
+          }
         };
         doc.addEventListener("change", rangeChangeHandler, true);
       }
 
       if (!frameLoadHandler) {
-        frameLoadHandler = () => scheduleApply(100);
+        frameLoadHandler = () => {
+          scheduleApply(100);
+          scheduleApply(500);
+        };
         frame.addEventListener("load", frameLoadHandler);
       }
 
