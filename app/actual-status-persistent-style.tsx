@@ -17,20 +17,16 @@ export default function ActualStatusPersistentStyle() {
       const brandRules = palette.map((color, index) =>
         `.brand-chart .brand-month:nth-child(-n+${count}) > button:nth-of-type(${index + 1}){background:${color}!important;background-color:${color}!important}`
       ).join("\n");
+      const productRules = palette.map((color, index) =>
+        `.product-bars .product-month:nth-child(-n+${count}) > .product-stack > i:nth-child(${index + 1}){background:${color}!important;background-color:${color}!important}`
+      ).join("\n");
       return `
 ${brandRules}
 .brand-chart .brand-month:nth-child(-n+${count}) > i{background:#d6e5f7!important;background-color:#d6e5f7!important}
-.product-month:nth-child(-n+${count}) > button:nth-of-type(1),
-.product-month:nth-child(-n+${count}) [style*="background:#d"],
-.product-month:nth-child(-n+${count}) [style*="background: #d"],
-.product-month:nth-child(-n+${count}) [style*="background:#e"],
-.product-month:nth-child(-n+${count}) [style*="background: #e"],
-.product-month:nth-child(-n+${count}) [style*="background:#f"],
-.product-month:nth-child(-n+${count}) [style*="background: #f"]{background:#2867f0!important;background-color:#2867f0!important}
-.product-month:nth-child(-n+${count}) > button:nth-of-type(2){background:#4384dc!important;background-color:#4384dc!important}
-.product-month:nth-child(-n+${count}) > button:nth-of-type(3){background:#5b99e6!important;background-color:#5b99e6!important}
-.product-month:nth-child(-n+${count}) > button:nth-of-type(4){background:#78adeb!important;background-color:#78adeb!important}
-.product-month:nth-child(-n+${count}) > i{background:#d6e5f7!important;background-color:#d6e5f7!important}
+${productRules}
+.product-bars .product-month:nth-child(-n+${count}) > .product-stack{background:transparent!important}
+.product-bars .product-month:nth-child(-n+${count}) > .product-stack > i{background-color:#2867f0!important}
+.product-bars .product-month:nth-child(-n+${count}) > strong{color:#111827!important}
 `;
     };
 
