@@ -154,10 +154,67 @@
       if (["전환매출", "전환율", "ROHS"].includes(item.textContent.trim())) item.remove();
     });
   };
+
+  const ensureEventSpendStyles = () => {
+    if (document.getElementById("event-spend-live-style")) return;
+    const style = document.createElement("style");
+    style.id = "event-spend-live-style";
+    style.textContent = `
+      .event-spend-panel .event-live-list{display:grid;gap:10px;margin-top:14px}
+      .event-spend-panel .event-live-row{display:grid;grid-template-columns:150px minmax(0,1fr) 90px;align-items:center;gap:12px}
+      .event-spend-panel .event-live-name{color:#526176;font-size:11px;font-weight:850}
+      .event-spend-panel .event-live-track{height:22px;border-radius:7px;background:#edf1f6;overflow:hidden}
+      .event-spend-panel .event-live-bar{display:block;height:100%;min-width:2px;border-radius:7px;background:#2867f0}
+      .event-spend-panel .event-live-value{text-align:right;color:#10203d;font-size:11px;font-weight:900;font-variant-numeric:tabular-nums}
+      .event-spend-panel .event-live-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding:11px 13px;border:1px solid #dfe7f1;border-radius:10px;background:#f8faff}
+      .event-spend-panel .event-live-summary span{color:#718096;font-size:10px;font-weight:800}
+      .event-spend-panel .event-live-summary strong{color:#205ac9;font-size:14px}
+      @media(max-width:760px){.event-spend-panel .event-live-row{grid-template-columns:110px minmax(0,1fr) 76px}.event-spend-panel .event-live-name,.event-spend-panel .event-live-value{font-size:9px}}
+    `;
+    document.head.append(style);
+  };
+  const ensureEventSpendPanel = () => {
+    if (!dashboardSnapshot) return;
+    const panel = document.querySelector(".event-spend-panel");
+    if (!panel) return;
+    const indexes = selectedIndexes();
+    if (indexes.length !== 1) return;
+    const monthIndex = indexes[0];
+    const rows = (dashboardSnapshot.eventBreakdown || [])
+      .map(item => ({ name: String(item.name || "").replace(/^\d+\.\s*/, ""), value: Number(item.values?.[monthIndex]) || 0 }))
+      .filter(item => item.value !== 0);
+    const signature = JSON.stringify([monthIndex, rows]);
+    if (panel.dataset.liveEventSignature === signature) return;
+    panel.dataset.liveEventSignature = signature;
+    ensureEventSpendStyles();
+    const old = panel.querySelector(".event-live-wrap");
+    old?.remove();
+    panel.querySelector(".event-empty")?.setAttribute("style", "display:none!important");
+    const total = rows.reduce((sum, item) => sum + item.value, 0);
+    const totalNode = panel.querySelector(".event-total");
+    if (totalNode) totalNode.textContent = `${monthIndex + 1}월 합계 ${Math.round(total / 1000).toLocaleString("ko-KR")}천원`;
+    const unit = panel.querySelector(".unit");
+    const wrap = document.createElement("div");
+    wrap.className = "event-live-wrap";
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="event-live-summary"><span>${monthIndex + 1}월 매출차감행사비</span><strong>입력 내역 없음</strong></div>`;
+    } else {
+      const max = Math.max(...rows.map(item => Math.abs(item.value)), 1);
+      wrap.innerHTML = `<div class="event-live-list">${rows.map(item => {
+        const width = Math.max(2, Math.abs(item.value) / max * 100);
+        return `<div class="event-live-row"><span class="event-live-name">${item.name}</span><div class="event-live-track"><i class="event-live-bar" style="width:${width}%"></i></div><strong class="event-live-value">${Math.round(item.value / 1000).toLocaleString("ko-KR")}</strong></div>`;
+      }).join("")}</div><div class="event-live-summary"><span>${monthIndex + 1}월 행사별 매출차감 합계</span><strong>${Math.round(total / 1000).toLocaleString("ko-KR")}천원</strong></div>`;
+    }
+    unit ? unit.insertAdjacentElement("beforebegin", wrap) : panel.append(wrap);
+  };
+
   const apply = () => {
-    ensureStaticPreviewBadge(); moveOperations(); removeProductGmvAdMetrics(); ensureAdSection();
+    ensureStaticPreviewBadge(); moveOperations(); removeProductGmvAdMetrics(); ensureAdSection(); ensureEventSpendPanel();
   };
   window.addEventListener("load", () => setTimeout(apply, 1800), {once:true});
-  document.addEventListener("change", event => { if (event.target.matches(".report-brand-select")) setTimeout(apply, 400); });
+  document.addEventListener("change", event => {
+    if (event.target.matches(".report-brand-select")) setTimeout(apply, 400);
+    if (event.target.matches(".range-filter select")) setTimeout(apply, 450);
+  });
   document.addEventListener("click", () => setTimeout(apply, 400));
 })();
