@@ -165,3 +165,14 @@
 .brand-accounting-block > .brand-accounting-summary {
   display: none !important;
 }
+
+/* Keep the page/tab label long, but show only the requested GMV chart title. */
+.brand-trend-panel.report-brand-summary > .panel-heading h2 {
+  font-size: 0 !important;
+}
+.brand-trend-panel.report-brand-summary > .panel-heading h2::after {
+  content: "로켓 브랜드별 GMV";
+  font-size: 22px;
+  font-weight: 900;
+  color: #10203d;
+}
