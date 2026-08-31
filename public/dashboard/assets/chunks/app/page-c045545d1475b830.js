@@ -827,16 +827,6 @@
                     ),
                   ),
                 }),
-                "잘싸모래" === s &&
-                  "GMV" === l &&
-                  (0, n.jsx)($, {
-                    revenue: b.revenue,
-                    gmvMax: d,
-                    series: [
-                      { label: "ROHS", values: x, color: "#dc5963" },
-                      { label: "전환율", values: h, color: "#2867f0" },
-                    ],
-                  }),
               ],
             }),
             (0, n.jsxs)("div", {
@@ -864,35 +854,12 @@
                 }),
                 "잘싸모래" === s &&
                   "GMV" === l &&
-                  (0, n.jsxs)(n.Fragment, {
+                  (0, n.jsxs)("span", {
                     children: [
-                      (0, n.jsxs)("span", {
-                        children: [
-                          (0, n.jsx)("i", {
-                            className: "conversion-revenue-legend",
-                          }),
-                          "전환매출",
-                        ],
+                      (0, n.jsx)("i", {
+                        className: "conversion-revenue-legend",
                       }),
-                      [
-                        ["ROHS", "#dc5963"],
-                        ["전환율", "#2867f0"],
-                      ].map((e) => {
-                        let [s, a] = e;
-                        return (0, n.jsxs)(
-                          "span",
-                          {
-                            children: [
-                              (0, n.jsx)("i", {
-                                className: "efficiency-line-legend",
-                                style: { background: a },
-                              }),
-                              s,
-                            ],
-                          },
-                          s,
-                        );
-                      }),
+                      "전환매출",
                     ],
                   }),
               ],
@@ -901,7 +868,7 @@
               className: "chart-note",
               children:
                 "GMV" === l
-                  ? "단위: 천원 \xb7 기본 막대는 품목별 GMV, 보조 막대는 광고 전환매출이며 선은 전환율과 ROHS 추이입니다."
+                  ? "단위: 천원 \xb7 기본 막대는 품목별 GMV, 보조 막대는 광고 전환매출입니다."
                   : "단위: 천원 \xb7 막대는 품목별 회계매출이며 8~12월 예상은 노란색입니다.",
             }),
           ],
@@ -2797,4 +2764,3 @@
     (e.O(0, [441, 255, 358], () => e((e.s = 4176))), (_N_E = e.O()));
   },
 ]);
-
