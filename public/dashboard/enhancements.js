@@ -10,7 +10,9 @@
         if (Array.isArray(monthlyOperations.summaries)) dashboardSnapshot.operationSummaries = monthlyOperations.summaries;
         if (Array.isArray(monthlyOperations.plans)) dashboardSnapshot.salesPlans = monthlyOperations.plans;
       }
-      setTimeout(apply, 0);
+      // Let the exported React dashboard finish hydrating before adding the
+      // sheet-driven enhancement nodes. Mutating sooner can trigger React #418.
+      setTimeout(apply, 2200);
     })
     .catch(() => {});
   const ensureStaticPreviewBadge = () => {
