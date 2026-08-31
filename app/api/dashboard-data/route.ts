@@ -10,8 +10,15 @@ type TextBlock = { summaries: string[]; plans: string[] };
 type AdPerformance = {
   spend: number[];
   revenue: number[];
+  impressions: number[];
+  clicks: number[];
+  orders: number[];
+  newCustomers: number[];
+  clickRate: number[];
   conversionRate: number[];
+  repurchaseRate: number[];
   rohs: number[];
+  actions: string[];
   assessment: string[];
   plans: string[];
 };
@@ -61,9 +68,8 @@ function monthIndex(label: unknown) {
   const match = clean(label).match(/(\d{1,2})월/);
   return match ? Math.max(0, Math.min(11, Number(match[1]) - 1)) : -1;
 }
-function findRow(rows: Row[], first: string, second?: string, occurrence = 0) {
-  const matches = rows.filter((row) => normalize(row[0]) === normalize(first) && (second === undefined || normalize(row[1]) === normalize(second)));
-  return matches[occurrence];
+function findRow(rows: Row[], first: string, second?: string) {
+  return rows.find((row) => normalize(row[0]) === normalize(first) && (second === undefined || normalize(row[1]) === normalize(second)));
 }
 function findRows(rows: Row[], first: string) { return rows.filter((row) => normalize(row[0]) === normalize(first)); }
 function section(rows: Row[], title: string, occurrence = 0): Row[] {
@@ -135,27 +141,46 @@ function parseMarketingSummary(rows: Row[]): TextBlock {
   }
   return { summaries, plans };
 }
+function emptyAd(): AdPerformance {
+  return {
+    spend: emptyNum(), revenue: emptyNum(), impressions: emptyNum(), clicks: emptyNum(), orders: emptyNum(), newCustomers: emptyNum(),
+    clickRate: emptyNum(), conversionRate: emptyNum(), repurchaseRate: emptyNum(), rohs: emptyNum(),
+    actions: emptyText(), assessment: emptyText(), plans: emptyText(),
+  };
+}
 function parseAdBlock(rows: Row[], brand: string): AdPerformance {
-  const result: AdPerformance = { spend: emptyNum(), revenue: emptyNum(), conversionRate: emptyNum(), rohs: emptyNum(), assessment: emptyText(), plans: emptyText() };
+  const result = emptyAd();
   const start = rows.findIndex((row) => normalize(row[0]) === `${brand} 광고 운영 성과`);
   if (start < 0) return result;
   const header = rows[start + 1] || [];
   const monthColumns = header.map((cell, column) => ({ index: monthIndex(cell), column })).filter((entry) => entry.index >= 0);
-  const labels: Record<string, keyof AdPerformance> = { 광고비: "spend", 전환매출: "revenue", 전환율: "conversionRate", ROHS: "rohs", 성과판단: "assessment", 향후계획: "plans" };
-  for (let i = start + 2; i < Math.min(rows.length, start + 10); i += 1) {
-    const key = labels[normalize(rows[i][0])];
-    if (!key) continue;
+  for (let i = start + 2; i < Math.min(rows.length, start + 20); i += 1) {
+    const label = normalize(rows[i][0]);
+    if (!label) continue;
     monthColumns.forEach(({ index, column }) => {
-      if (key === "assessment" || key === "plans") result[key][index] = clean(rows[i][column]);
-      else {
-        const rawValue = clean(rows[i][column]);
-        let value = num(rawValue);
-        if ((key === "conversionRate" || key === "rohs") && !rawValue.includes("%") && value > 0 && value <= 1) value *= 100;
-        result[key][index] = value;
-      }
+      const raw = clean(rows[i][column]);
+      let value = num(raw);
+      if (["클릭률", "전환율", "재구매율", "ROHS"].includes(label) && !raw.includes("%") && value > 0 && value <= 1) value *= 100;
+      if (label === "광고비") result.spend[index] = value;
+      else if (label === "전환매출") result.revenue[index] = value;
+      else if (label === "노출수") result.impressions[index] = value;
+      else if (label === "클릭수") result.clicks[index] = value;
+      else if (label === "주문수") result.orders[index] = value;
+      else if (label === "신규고객" || label === "신규고객수") result.newCustomers[index] = value;
+      else if (label === "클릭률") result.clickRate[index] = value;
+      else if (label === "전환율") result.conversionRate[index] = value;
+      else if (label === "재구매율") result.repurchaseRate[index] = value;
+      else if (label === "ROHS" || label === "ROAS") result.rohs[index] = value;
+      else if (label === "액션") result.actions[index] = raw;
+      else if (label === "성과판단") result.assessment[index] = raw;
+      else if (label === "향후계획") result.plans[index] = raw;
     });
   }
   return result;
+}
+function parseEventBreakdown(rows: Row[]) {
+  const names = ["1. 펫페어", "2. 펫페스티벌", "3. 타임프로모션", "4. 골드박스", "5. 자체프로모션", "6. 펫용품위크", "7. 펫푸드위크"];
+  return names.map((name) => ({ name, values: months(findRow(rows, name)) }));
 }
 async function fetchSheet(gid: string): Promise<Row[]> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&_=${Date.now()}`;
@@ -164,19 +189,14 @@ async function fetchSheet(gid: string): Promise<Row[]> {
   return parseCsv(await response.text());
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  if (!url.searchParams.has("enhancement")) {
-    return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } });
-  }
-
+export async function GET() {
   try {
     const [monthly, brand, item, ratio, budget, deduction, accountingRows] = await Promise.all([
       fetchSheet(GIDS.monthly), fetchSheet(GIDS.brand), fetchSheet(GIDS.item), fetchSheet(GIDS.ratio), fetchSheet(GIDS.budget), fetchSheet(GIDS.deduction), fetchSheet(GIDS.accounting),
     ]);
     const monthlyTotals = findRows(monthly, "쿠팡 총 GMV");
     const rocketRow = findRow(monthly, "쿠팡 로켓 GMV");
-    const rocketIndex = monthly.indexOf(rocketRow);
+    const rocketIndex = monthly.indexOf(rocketRow || []);
     const statusRow = rocketIndex > 0 ? monthly[rocketIndex - 1] : undefined;
     const monthlyText = parseMonthlyText(monthly);
     const brandText = parseSummaryBlock(brand, "브랜드별 운영요약 - 전체");
@@ -192,15 +212,13 @@ export async function GET(request: Request) {
       return { name, budget: num(row?.[3]), spent: num(row?.[4]) };
     });
     const budgetTotal = findRow(budget, "합계");
-    const deductionTotal = deduction.at(-1) || [];
-    const eventDeduction = Array.from({ length: 12 }, (_, index) => index >= 3 && index <= 7 ? num(deductionTotal[index - 1]) : 0);
     const data = {
       source: "Google Sheets",
       status: Array.from({ length: 12 }, (_, index) => clean(statusRow?.[MONTH_START + index]) || (index <= 7 ? "실적" : "예상")),
+      gmvTarget: months(monthlyTotals[0]),
       rocketGmv: months(rocketRow),
       wingGmv: months(findRow(monthly, "쿠팡 윙 GMV")),
       totalGmv: months(monthlyTotals.at(-1)),
-      gmvTarget: months(monthlyTotals[0]),
       marketing: months(findRow(ratio, "마케팅비")),
       products: collectRepeatedSections(item, "품목별 GMV"),
       productAccounting: collectRepeatedSections(item, "품목별 재고매출"),
@@ -209,35 +227,29 @@ export async function GET(request: Request) {
       brandAccountingTotal: months(brandInventoryTotal),
       operationSummaries: monthlyText.summaries,
       salesPlans: monthlyText.plans,
-      brandOperationSummaries: brandText.summaries,
-      brandSalesPlans: brandText.plans,
       marketingOperationSummaries: marketingText.summaries,
       marketingSalesPlans: marketingText.plans,
+      brandOperationSummaries: brandText.summaries,
+      brandSalesPlans: brandText.plans,
+      budgetRows,
+      budget: num(budgetTotal?.[3]),
+      spent: num(budgetTotal?.[4]),
       accounting: {
         rocket: months(findRow(accountingRows, "쿠팡로켓", "회계매출")),
         wing: months(findRow(accountingRows, "쿠팡윙", "회계매출")),
         eventDeduction: months(findRow(accountingRows, "쿠팡로켓", "매출차감행사비 - 쿠폰행사")),
         incentive: months(findRow(accountingRows, "쿠팡로켓", "매출차감행사비 - 판매장려금")),
       },
-      eventDeduction,
-      budgetRows,
-      budget: num(budgetTotal?.[3]),
-      spent: num(budgetTotal?.[4]),
+      eventBreakdown: parseEventBreakdown(deduction),
       adPerformance: adPerformanceByBrand["잘싸모래"],
       adPerformanceByBrand,
-      refreshedAt: new Date().toISOString(),
-      sourceMap: {
-        monthly: { gid: GIDS.monthly, rows: "3-20" },
-        brand: { gid: GIDS.brand, rows: "2-86" },
-        item: { gid: GIDS.item, rows: "3-160" },
-        ratio: { gid: GIDS.ratio, rows: "2-16" },
-        budget: { gid: GIDS.budget, rows: "2-12" },
-        deduction: { gid: GIDS.deduction, rows: "2-38" },
-        accounting: { gid: GIDS.accounting, rows: "2-9" },
-      },
     };
     if (!data.rocketGmv.some(Boolean) || !data.totalGmv.some(Boolean)) throw new Error("필수 월별 GMV 데이터를 찾지 못했습니다.");
-    return NextResponse.json({ data }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache", Expires: "0" } });
+    const updatedAt = new Date().toISOString();
+    return NextResponse.json(
+      { data, source: "Google Sheets", updatedAt },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache", Expires: "0" } },
+    );
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "시트 연동 오류" }, { status: 502, headers: { "Cache-Control": "no-store" } });
   }
