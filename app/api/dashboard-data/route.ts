@@ -105,16 +105,14 @@ function collectRepeatedSections(rows: Row[], title: string): Series[] {
 function parseMonthlyText(rows: Row[]): TextBlock {
   const summaries = emptyText();
   const plans = emptyText();
-  const headerIndex = rows.findIndex((row) => normalize(row[0]) === "구분" && normalize(row[1]) === "월");
-  const header = headerIndex >= 0 ? rows[headerIndex] : [];
-  const summaryColumn = header.findIndex((cell) => ["요약", "운영요약"].includes(normalize(cell)));
-  const planColumn = header.findIndex((cell) => ["계획", "향후계획", "영업계획"].includes(normalize(cell)));
   rows.forEach((row) => {
     if (normalize(row[0]) !== "쿠팡 월별 GMV") return;
     const index = monthIndex(row[1]);
     if (index < 0) return;
-    summaries[index] = clean(row[summaryColumn >= 0 ? summaryColumn : 2]);
-    plans[index] = clean(row[planColumn >= 0 ? planColumn : 3]);
+    const contentCells = row.slice(2).map(clean).filter(Boolean);
+    if (contentCells[0]) summaries[index] = contentCells[0];
+    if (contentCells[1]) plans[index] = contentCells[1];
+    else if (clean(row[3]) && clean(row[3]) !== summaries[index]) plans[index] = clean(row[3]);
   });
   return { summaries, plans };
 }
@@ -196,11 +194,11 @@ function parseEventBreakdown(rows: Row[]) {
   let current = -1;
   for (let i = Math.max(0, headerIndex + 1); i < rows.length; i += 1) {
     const first = normalize(rows[i][0]);
+    const second = normalize(rows[i][1]);
     const categoryIndex = categoryNames.findIndex((name) => normalize(name) === first);
     if (categoryIndex >= 0) current = categoryIndex;
     if (current < 0) continue;
-    const nextCategory = categoryNames.findIndex((name) => normalize(name) === first);
-    if (nextCategory >= 0) current = nextCategory;
+    if (!first && !second) continue;
     monthColumns.forEach(({ index, column }) => {
       result[current].values[index] += num(rows[i][column]);
     });
