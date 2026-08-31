@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import MarketingOperationsFix from "./marketing-operations-fix";
 import BrandOperationsFix from "./brand-operations-fix";
+import ActualStatusFix from "./actual-status-fix";
 
 export const metadata: Metadata = {
   title: "쿠팡 실적 보고서",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <MarketingOperationsFix />
         <BrandOperationsFix />
+        <ActualStatusFix />
       </body>
     </html>
   );
