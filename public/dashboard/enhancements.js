@@ -95,64 +95,70 @@
     ensureOperationPlan(document.querySelector(".hero-panel"),"marketing");
   };
 
-  let adRows = [];
+  const format = value => new Intl.NumberFormat("ko-KR").format(Math.round(Number(value) || 0));
+  const escapeHtml = value => String(value || "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const rowsForBrand = brand => {
     const ad = dashboardSnapshot?.adPerformanceByBrand?.[brand];
     if (!ad) return [];
-    return Array.from({length:9},(_,offset)=>{
-      const index=offset+3;
-      return {
-        month:`${index+1}월`,
-        spend:Number(ad.spend?.[index])||0,
-        revenue:Number(ad.revenue?.[index])||0,
-        conversion:Number(ad.conversionRate?.[index])||0,
-        rohs:Number(ad.rohs?.[index])||0,
-      };
-    }).filter(row=>row.spend||row.revenue||row.conversion||row.rohs);
+    return selectedIndexes().map(index => ({
+      index,
+      month: `${index + 1}월`,
+      spend: Number(ad.spend?.[index]) || 0,
+      revenue: Number(ad.revenue?.[index]) || 0,
+      conversion: Number(ad.conversionRate?.[index]) || 0,
+      rohs: Number(ad.rohs?.[index]) || 0,
+    })).filter(row => row.spend || row.revenue || row.conversion || row.rohs);
   };
-  const won = value => new Intl.NumberFormat("ko-KR").format(value) + "원";
-  const adChart = () => {
-    if (!adRows.length) return '<div class="custom-ad-empty"><strong>광고 성과 입력 대기</strong><p>쿠팡_품목별 GMV 및 재고매출 탭의 해당 브랜드 광고 운영 성과 영역에 값을 입력하면 표시됩니다.</p></div>';
-    const maxMoney = Math.max(...adRows.flatMap(d => [d.spend, d.revenue]));
-    const xs = [105,245,385,525], base=210, top=28, h=base-top;
-    const bars = adRows.slice(0,4).map((d,i) => {
-      const rh=d.revenue/maxMoney*h, sh=d.spend/maxMoney*h, x=xs[i];
-      return `<rect x="${x-36}" y="${base-rh}" width="30" height="${rh}" rx="4" fill="#2867f0"/><rect x="${x+6}" y="${base-sh}" width="30" height="${sh}" rx="4" fill="#a9bddc"/><text x="${x-21}" y="${base-rh-6}" text-anchor="middle" font-size="9" font-weight="900" fill="#205ac9">${Math.round(d.revenue/10000)}만</text><text x="${x+21}" y="${base-sh-6}" text-anchor="middle" font-size="9" font-weight="900" fill="#66748a">${Math.round(d.spend/10000)}만</text><text x="${x}" y="230" text-anchor="middle" font-size="10" font-weight="850" fill="#526176">${d.month}</text>`;
+  const renderRateChart = (rows, label, key, color) => {
+    const max = Math.max(...rows.map(row => row[key]), 1) * 1.15;
+    const coords = rows.map((row, index) => ({
+      x: rows.length === 1 ? 180 : 42 + (276 * index) / (rows.length - 1),
+      y: 112 - (row[key] / max) * 84,
+      value: row[key],
+      month: row.month,
+    }));
+    const decimals = key === "conversion" ? 1 : 0;
+    return `<div class="custom-rate-card" style="--rate-color:${color}"><div class="custom-rate-head"><div><span>${label} 추이</span><strong>${rows.at(-1)[key].toFixed(decimals)}%</strong></div><b>단위: %</b></div><svg viewBox="0 0 360 138" role="img" aria-label="${label} 월별 추이"><line x1="34" y1="112" x2="326" y2="112" stroke="#e8eef6"/><line x1="34" y1="28" x2="326" y2="28" stroke="#e8eef6"/><polyline fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${coords.map(point => `${point.x},${point.y}`).join(" ")}"/>${coords.map(point => `<circle cx="${point.x}" cy="${point.y}" r="4" fill="#fff" stroke="${color}" stroke-width="3"/><text x="${point.x}" y="${Math.max(18, point.y - 8)}" text-anchor="middle" font-size="10" font-weight="900" fill="${color}">${point.value.toFixed(decimals)}%</text><text x="${point.x}" y="132" text-anchor="middle" font-size="10" font-weight="850" fill="#526176">${point.month}</text>`).join("")}</svg></div>`;
+  };
+  const renderAdDashboard = rows => {
+    if (!rows.length) return '<div class="custom-ad-empty"><strong>광고 성과 입력 대기</strong><p>쿠팡_품목별 GMV 및 재고매출 탭의 해당 브랜드 광고 운영 성과 영역에 값을 입력하면 자동으로 표시됩니다.</p></div>';
+    const maxMoney = Math.max(...rows.flatMap(row => [row.spend, row.revenue]), 1) * 1.12;
+    const xAt = index => rows.length === 1 ? 360 : 90 + (540 * index) / (rows.length - 1);
+    const base = 232;
+    const bars = rows.map((row, index) => {
+      const x = xAt(index);
+      const revenueHeight = Math.max(3, row.revenue / maxMoney * 190);
+      const spendHeight = Math.max(3, row.spend / maxMoney * 190);
+      return `<rect x="${x - 32}" y="${base - revenueHeight}" width="29" height="${revenueHeight}" rx="5" fill="#2867f0"/><rect x="${x + 3}" y="${base - spendHeight}" width="29" height="${spendHeight}" rx="5" fill="#a9bddc"/><text x="${x - 17.5}" y="${Math.max(27, base - revenueHeight - 7)}" text-anchor="middle" font-size="9" font-weight="900" fill="#205ac9">${format(row.revenue / 10000)}만</text><text x="${x + 17.5}" y="${Math.max(27, base - spendHeight - 7)}" text-anchor="middle" font-size="9" font-weight="900" fill="#66748a">${format(row.spend / 10000)}만</text><text x="${x}" y="257" text-anchor="middle" font-size="10" font-weight="850" fill="#526176">${row.month}</text>`;
     }).join("");
-    return `<div class="custom-ad-grid"><div class="custom-ad-card"><div class="custom-chart-title"><h4>광고비 대비 전환매출 추이</h4><span><i></i>전환매출 <i></i>광고비</span></div><svg viewBox="0 0 620 245"><line x1="50" y1="210" x2="580" y2="210" stroke="#e7edf5"/>${bars}</svg></div></div>`;
+    const table = `<div class="custom-ad-table-wrap"><table class="custom-ad-table"><thead><tr><th>월</th><th>집행 광고비</th><th>광고 전환매출</th><th>전환율</th><th>ROHS</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.month}</td><td>${format(row.spend)}원</td><td>${format(row.revenue)}원</td><td>${row.conversion.toFixed(1)}%</td><td>${row.rohs.toFixed(0)}%</td></tr>`).join("")}</tbody></table></div>`;
+    return `<div class="custom-ad-grid"><div class="custom-ad-card"><div class="custom-chart-title"><h4>광고비 대비 전환매출</h4><span><i></i>전환매출 <i></i>광고비</span></div><svg viewBox="0 0 720 275" role="img" aria-label="월별 광고비와 전환매출 비교"><line x1="44" y1="42" x2="682" y2="42" stroke="#e8eef6"/><line x1="44" y1="89.5" x2="682" y2="89.5" stroke="#e8eef6"/><line x1="44" y1="137" x2="682" y2="137" stroke="#e8eef6"/><line x1="44" y1="184.5" x2="682" y2="184.5" stroke="#e8eef6"/><line x1="44" y1="232" x2="682" y2="232" stroke="#e8eef6"/>${bars}</svg></div><div class="custom-rate-stack">${renderRateChart(rows, "전환율", "conversion", "#18a67b")}${renderRateChart(rows, "ROHS", "rohs", "#dc5963")}</div></div>${table}`;
   };
   const ensureAdSection = () => {
-    const detail = document.querySelector(".brand-trend-panel .brand-detail");
-    if (!detail) return;
-    const selected=document.querySelector(".report-brand-select")?.value || "";
-    const visible=Boolean(selected && selected!=="전체 품목");
-    adRows=visible?rowsForBrand(selected):[];
-    let section = detail.querySelector(".custom-ad-ops");
+    const panel = document.querySelector(".brand-trend-panel");
+    const host = panel?.querySelector(":scope > .ad-performance-summary");
+    if (!panel || !host) return;
+    const selected = document.querySelector(".report-brand-select")?.value?.trim() || "";
+    const visible = panel.classList.contains("report-item-summary") && Boolean(selected && !selected.includes("전체"));
+    const rows = visible ? rowsForBrand(selected) : [];
+    let section = host.querySelector(":scope > .custom-ad-ops");
     if (!section && visible) {
       section = document.createElement("section");
       section.className = "custom-ad-ops";
-      detail.append(section);
+      host.append(section);
     }
+    host.classList.toggle("report-ad-host-active", visible);
     if (!section) return;
-    const signature=JSON.stringify([selected,adRows]);
+    const signature=JSON.stringify([selected,rows]);
     if(section.dataset.signature!==signature){
-      const latest=adRows.at(-1);
-      const month=latest?.month||"선택 월";
+      const latest=rows.at(-1);
+      const first=rows[0];
       const display=(value,formatter)=>value?formatter(value):"입력 대기";
+      const delta=(current,base,suffix="%")=>base?`${current>=base?"▲":"▼"} ${Math.abs((current-base)/base*100).toFixed(1)}${suffix}`:"비교 데이터 없음";
       section.dataset.signature=signature;
-      section.innerHTML = `<div class="custom-ad-head"><div><p>BRAND AD PERFORMANCE</p><h3>${selected} 광고 운영 성과</h3></div><span>광고비·전환율·전환매출·ROHS 월별 추이</span></div><div class="custom-ad-kpis"><article><span>${month} 광고비</span><strong>${display(latest?.spend,won)}</strong></article><article><span>${month} 전환매출</span><strong>${display(latest?.revenue,won)}</strong></article><article><span>${month} 전환율</span><strong>${display(latest?.conversion,value=>value.toFixed(1)+"%")}</strong></article><article><span>${month} ROHS</span><strong>${display(latest?.rohs,value=>value.toFixed(0)+"%")}</strong></article></div>${adChart()}`;
+      section.innerHTML = `<div class="custom-ad-head"><div><p>BRAND AD PERFORMANCE</p><h3>${escapeHtml(selected)} 광고 운영 성과</h3></div><span>시트 입력값 · 실제 입력 월만 표시</span></div><div class="custom-ad-kpis"><article><span>${latest?.month || "선택 월"} 광고 전환매출</span><strong>${display(latest?.revenue,value=>format(value)+"원")}</strong><small>${latest&&first?delta(latest.revenue,first.revenue):"비교 데이터 없음"}</small></article><article><span>${latest?.month || "선택 월"} 집행 광고비</span><strong>${display(latest?.spend,value=>format(value)+"원")}</strong><small>동일 월 집행액</small></article><article><span>${latest?.month || "선택 월"} 전환율</span><strong>${display(latest?.conversion,value=>value.toFixed(1)+"%")}</strong><small>${latest&&first?(latest.conversion-first.conversion>=0?"+":"")+(latest.conversion-first.conversion).toFixed(1)+"%p":"비교 데이터 없음"}</small></article><article><span>${latest?.month || "선택 월"} ROHS</span><strong>${display(latest?.rohs,value=>value.toFixed(0)+"%")}</strong><small>${latest&&first?(latest.rohs-first.rohs>=0?"+":"")+(latest.rohs-first.rohs).toFixed(0)+"%p":"비교 데이터 없음"}</small></article></div>${renderAdDashboard(rows)}`;
     }
     section.classList.toggle("is-visible", visible);
-  };
-  const removeProductGmvAdMetrics = () => {
-    const detail = document.querySelector(".brand-trend-panel .brand-detail");
-    if (!detail) return;
-    const gmvChart = detail.querySelectorAll(".product-detail-chart")[0] || detail;
-    gmvChart.querySelectorAll(".product-efficiency-overlay, .conversion-revenue-bar, .conversion-revenue-label").forEach(node => node.remove());
-    const legend = detail.querySelectorAll(".product-legend")[0];
-    legend?.querySelectorAll("span").forEach(item => {
-      if (["전환매출", "전환율", "ROHS"].includes(item.textContent.trim())) item.remove();
-    });
   };
 
   const ensureEventSpendStyles = () => {
@@ -210,7 +216,7 @@
   };
 
   const apply = () => {
-    ensureStaticPreviewBadge(); moveOperations(); removeProductGmvAdMetrics(); ensureAdSection(); ensureEventSpendPanel();
+    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureEventSpendPanel();
   };
   window.addEventListener("load", () => setTimeout(apply, 1800), {once:true});
   document.addEventListener("change", event => {

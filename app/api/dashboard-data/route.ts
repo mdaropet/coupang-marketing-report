@@ -153,9 +153,24 @@ function parseAdBlock(rows: Row[], brand: string): AdPerformance {
   const start = rows.findIndex((row) => normalize(row[0]) === `${brand} 광고 운영 성과`);
   if (start < 0) return result;
   const header = rows[start + 1] || [];
-  const monthColumns = header.map((cell, column) => ({ index: monthIndex(cell), column })).filter((entry) => entry.index >= 0);
+  let monthColumns = header.map((cell, column) => ({ index: monthIndex(cell), column })).filter((entry) => entry.index >= 0);
+
+  // Google Visualization CSV only exposes the first and last labels when the
+  // month header is formatted as a merged range. The values below it still
+  // occupy consecutive columns, so reconstruct the missing month mapping.
+  if (monthColumns.length >= 2) {
+    const first = monthColumns[0];
+    const last = monthColumns.at(-1)!;
+    if (last.column - first.column === last.index - first.index) {
+      monthColumns = Array.from({ length: last.column - first.column + 1 }, (_, offset) => ({
+        index: first.index + offset,
+        column: first.column + offset,
+      }));
+    }
+  }
   for (let i = start + 2; i < Math.min(rows.length, start + 20); i += 1) {
     const label = normalize(rows[i][0]);
+    if (label.endsWith("광고 운영 성과")) break;
     if (!label) continue;
     monthColumns.forEach(({ index, column }) => {
       const raw = clean(rows[i][column]);
