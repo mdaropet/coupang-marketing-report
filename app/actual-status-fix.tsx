@@ -8,9 +8,10 @@ export default function ActualStatusFix() {
   useEffect(() => {
     let status: string[] = [];
     let frame: HTMLIFrameElement | null = null;
-    let observer: MutationObserver | null = null;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    let applying = false;
+    let retryTimer: ReturnType<typeof setInterval> | null = null;
+    let rangeChangeHandler: ((event: Event) => void) | null = null;
+    let frameLoadHandler: (() => void) | null = null;
+    let queued = false;
 
     const monthIndex = (value: unknown) => {
       const match = String(value || "").match(/(\d{1,2})월/);
@@ -18,6 +19,7 @@ export default function ActualStatusFix() {
       const index = Number(match[1]) - 1;
       return index >= 0 && index < 12 ? index : -1;
     };
+
     const isActual = (index: number) => String(status[index] || "").trim() === "실적";
 
     const adjustSvgMonthGroups = (doc: Document) => {
@@ -28,15 +30,17 @@ export default function ActualStatusFix() {
         const actual = isActual(index);
 
         const bg = group.querySelector<SVGRectElement>(".gmv-target-actual-bg, .gmv-target-forecast-bg");
-        if (bg) bg.setAttribute("class", actual ? "gmv-target-actual-bg" : "gmv-target-forecast-bg");
+        if (bg) {
+          const next = actual ? "gmv-target-actual-bg" : "gmv-target-forecast-bg";
+          if (bg.getAttribute("class") !== next) bg.setAttribute("class", next);
+        }
 
         const bars = [...group.querySelectorAll<SVGRectElement>(".bar-rocket, .bar-wing, .bar-forecast")];
         bars.forEach((bar, barIndex) => {
-          if (actual) {
-            bar.setAttribute("class", barIndex === 0 ? "bar-rocket" : "bar-wing");
-          } else {
-            bar.setAttribute("class", barIndex === 0 ? "bar-forecast" : "bar-forecast wing-forecast");
-          }
+          const next = actual
+            ? (barIndex === 0 ? "bar-rocket" : "bar-wing")
+            : (barIndex === 0 ? "bar-forecast" : "bar-forecast wing-forecast");
+          if (bar.getAttribute("class") !== next) bar.setAttribute("class", next);
         });
       });
     };
@@ -45,7 +49,10 @@ export default function ActualStatusFix() {
       doc.querySelectorAll<HTMLElement>(".brand-month").forEach(node => {
         const index = monthIndex(node.querySelector(":scope > span:last-child")?.textContent || node.textContent);
         if (index < 0) return;
-        node.classList.toggle("forecast-brand-month", !isActual(index));
+        const shouldForecast = !isActual(index);
+        if (node.classList.contains("forecast-brand-month") !== shouldForecast) {
+          node.classList.toggle("forecast-brand-month", shouldForecast);
+        }
       });
     };
 
@@ -58,7 +65,8 @@ export default function ActualStatusFix() {
         node.classList.toggle("actual-column", actual);
         node.classList.toggle("forecast-column", !actual);
         const mini = node.querySelector<HTMLElement>(".period-mini");
-        if (mini) mini.textContent = actual ? "실적" : "예상";
+        const nextText = actual ? "실적" : "예상";
+        if (mini && mini.textContent !== nextText) mini.textContent = nextText;
       });
     };
 
@@ -99,7 +107,6 @@ export default function ActualStatusFix() {
       const left = Number(actualRect.getAttribute("x")) || 64;
       const right = (Number(forecastRect.getAttribute("x")) || 0) + (Number(forecastRect.getAttribute("width")) || 0);
       const boundary = (lastActual.x + firstForecast.x) / 2;
-      actualRect.setAttribute("x", String(left));
       actualRect.setAttribute("width", String(boundary - left));
       forecastRect.setAttribute("x", String(boundary));
       forecastRect.setAttribute("width", String(right - boundary));
@@ -108,42 +115,59 @@ export default function ActualStatusFix() {
     };
 
     const adjustCopy = (doc: Document) => {
-      doc.querySelectorAll<HTMLElement>(".brand-chart-guide span, .gmv-chart-guide span, .unit, .forecast-legend-chip").forEach(node => {
-        if (node.childElementCount === 0 && node.textContent?.includes("8~12월 예상")) {
-          node.textContent = node.textContent.replace("8~12월 예상", "9~12월 예상");
-        }
+      doc.querySelectorAll<HTMLElement>(".brand-chart-guide span, .gmv-chart-guide span, .unit").forEach(node => {
+        const current = node.textContent || "";
+        if (current.includes("8~12월 예상")) node.textContent = current.replace("8~12월 예상", "9~12월 예상");
       });
       doc.querySelectorAll<HTMLElement>(".brand-chart-legend span").forEach(node => {
-        if (node.textContent?.includes("8~12월 예상")) node.lastChild && (node.lastChild.textContent = "9~12월 예상");
+        const current = node.textContent || "";
+        if (current.includes("8~12월 예상")) {
+          const textNode = [...node.childNodes].find(child => child.nodeType === Node.TEXT_NODE && child.textContent?.includes("8~12월 예상"));
+          if (textNode) textNode.textContent = textNode.textContent!.replace("8~12월 예상", "9~12월 예상");
+        }
       });
     };
 
     const apply = () => {
-      if (applying || !status.length || !frame?.contentDocument) return;
-      applying = true;
-      try {
-        const doc = frame.contentDocument;
-        adjustSvgMonthGroups(doc);
-        adjustBrandMonths(doc);
-        adjustSpendMonths(doc);
-        adjustAccountingMonths(doc);
-        adjustPeriodBackground(doc);
-        adjustCopy(doc);
-      } finally {
-        applying = false;
-      }
+      const doc = frame?.contentDocument;
+      if (!status.length || !doc?.body) return;
+      adjustSvgMonthGroups(doc);
+      adjustBrandMonths(doc);
+      adjustSpendMonths(doc);
+      adjustAccountingMonths(doc);
+      adjustPeriodBackground(doc);
+      adjustCopy(doc);
+    };
+
+    const scheduleApply = (delay = 0) => {
+      if (queued) return;
+      queued = true;
+      window.setTimeout(() => {
+        queued = false;
+        requestAnimationFrame(apply);
+      }, delay);
     };
 
     const attach = () => {
       frame = document.querySelector<HTMLIFrameElement>(".dashboard-frame");
       const doc = frame?.contentDocument;
       if (!frame || !doc?.body) return false;
-      observer?.disconnect();
-      observer = new MutationObserver(() => requestAnimationFrame(apply));
-      observer.observe(doc.body, { childList: true, subtree: true });
-      doc.addEventListener("change", () => setTimeout(apply, 80), true);
-      doc.addEventListener("click", () => setTimeout(apply, 80), true);
-      apply();
+
+      if (!rangeChangeHandler) {
+        rangeChangeHandler = event => {
+          const target = event.target as Element | null;
+          if (target?.matches(".range-filter select, .report-brand-select")) scheduleApply(180);
+        };
+        doc.addEventListener("change", rangeChangeHandler, true);
+      }
+
+      if (!frameLoadHandler) {
+        frameLoadHandler = () => scheduleApply(100);
+        frame.addEventListener("load", frameLoadHandler);
+      }
+
+      scheduleApply();
+      scheduleApply(500);
       return true;
     };
 
@@ -152,10 +176,10 @@ export default function ActualStatusFix() {
       .then((payload: DashboardPayload) => {
         status = Array.isArray(payload.data?.status) ? payload.data!.status! : [];
         if (!attach()) {
-          timer = setInterval(() => {
-            if (attach() && timer) {
-              clearInterval(timer);
-              timer = null;
+          retryTimer = setInterval(() => {
+            if (attach() && retryTimer) {
+              clearInterval(retryTimer);
+              retryTimer = null;
             }
           }, 300);
         }
@@ -163,8 +187,10 @@ export default function ActualStatusFix() {
       .catch(() => {});
 
     return () => {
-      if (timer) clearInterval(timer);
-      observer?.disconnect();
+      if (retryTimer) clearInterval(retryTimer);
+      const doc = frame?.contentDocument;
+      if (doc && rangeChangeHandler) doc.removeEventListener("change", rangeChangeHandler, true);
+      if (frame && frameLoadHandler) frame.removeEventListener("load", frameLoadHandler);
     };
   }, []);
 
