@@ -5,6 +5,7 @@ import BrandOperationsFix from "./brand-operations-fix";
 import ActualStatusFix from "./actual-status-fix";
 import ActualStatusPersistentStyle from "./actual-status-persistent-style";
 import AdPerformanceFix from "./ad-performance-fix";
+import BrandSelectionSafetyFix from "./brand-selection-safety-fix";
 
 export const metadata: Metadata = {
   title: "쿠팡 실적 보고서",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <BrandOperationsFix />
         <ActualStatusFix />
         <ActualStatusPersistentStyle />
+        <BrandSelectionSafetyFix />
         <AdPerformanceFix />
       </body>
     </html>
