@@ -47,10 +47,23 @@ export default function Home() {
         if (next?.classList.contains("event-live-wrap")) next.classList.add("event-live-outside");
       };
 
-      moveEventDetail();
+      const normalizeMonthlyOperationLabels = () => {
+        doc.querySelectorAll(".operation-plan-monthly article > div > strong").forEach(node => {
+          const current = node.textContent?.trim() || "";
+          const normalized = current.replace(/^\d{1,2}월\s+/, "");
+          if (normalized && normalized !== current) node.textContent = normalized;
+        });
+      };
+
+      const applyAdjustments = () => {
+        moveEventDetail();
+        normalizeMonthlyOperationLabels();
+      };
+
+      applyAdjustments();
       observer?.disconnect();
-      observer = new MutationObserver(moveEventDetail);
-      observer.observe(doc.body, { childList: true, subtree: true });
+      observer = new MutationObserver(applyAdjustments);
+      observer.observe(doc.body, { childList: true, subtree: true, characterData: true });
     };
 
     frame.addEventListener("load", install);
