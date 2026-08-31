@@ -160,3 +160,8 @@
 .brand-trend-panel .brand-detail .conversion-revenue-label {
   display: none !important;
 }
+
+/* Preview change: remove repeated brand operations cards under inventory sales. */
+.brand-accounting-block > .brand-accounting-summary {
+  display: none !important;
+}
