@@ -82,14 +82,15 @@
   const rowsForBrand = brand => {
     const ad = dashboardSnapshot?.adPerformanceByBrand?.[brand];
     if (!ad) return [];
-    return selectedIndexes().map(index => ({
+    const rows = Array.from({length: 12}, (_, index) => ({
       index,
       month: `${index + 1}월`,
       spend: Number(ad.spend?.[index]) || 0,
       revenue: Number(ad.revenue?.[index]) || 0,
       conversion: Number(ad.conversionRate?.[index]) || 0,
       rohs: Number(ad.rohs?.[index]) || 0,
-    })).filter(row => row.spend || row.revenue || row.conversion || row.rohs);
+    }));
+    return rows.some(row => row.spend || row.revenue || row.conversion || row.rohs) ? rows : [];
   };
   const renderRateChart = (rows, label, key, color) => {
     const max = Math.max(...rows.map(row => row[key]), 1) * 1.15;
@@ -131,14 +132,92 @@
     if (!section) return;
     const signature=JSON.stringify([selected,rows]);
     if(section.dataset.signature!==signature){
-      const latest=rows.at(-1);
-      const first=rows[0];
+      const populatedRows=rows.filter(row=>row.spend||row.revenue||row.conversion||row.rohs);
+      const selectedRow=selectedIndexes().map(index=>rows[index]).filter(Boolean).findLast(row=>row.spend||row.revenue||row.conversion||row.rohs);
+      const latest=selectedRow||populatedRows.at(-1);
+      const first=populatedRows[0];
+      const ad=dashboardSnapshot?.adPerformanceByBrand?.[selected]||{};
+      const noteIndexes=selectedIndexes().filter(index=>String(ad.assessment?.[index]||ad.plans?.[index]||"").trim());
+      const noteIndex=noteIndexes.at(-1)??Array.from({length:12},(_,index)=>index).filter(index=>String(ad.assessment?.[index]||ad.plans?.[index]||"").trim()).at(-1);
+      const assessment=noteIndex===undefined?"성과판단 입력 대기":String(ad.assessment?.[noteIndex]||"성과판단 입력 대기");
+      const plan=noteIndex===undefined?"향후계획 입력 대기":String(ad.plans?.[noteIndex]||"향후계획 입력 대기");
       const display=(value,formatter)=>value?formatter(value):"입력 대기";
       const delta=(current,base,suffix="%")=>base?`${current>=base?"▲":"▼"} ${Math.abs((current-base)/base*100).toFixed(1)}${suffix}`:"비교 데이터 없음";
       section.dataset.signature=signature;
-      section.innerHTML = `<div class="custom-ad-head"><div><p>BRAND AD PERFORMANCE</p><h3>${escapeHtml(selected)} 광고 운영 성과</h3></div><span>시트 입력값 · 실제 입력 월만 표시</span></div><div class="custom-ad-kpis"><article><span>${latest?.month || "선택 월"} 광고 전환매출</span><strong>${display(latest?.revenue,value=>format(value)+"원")}</strong><small>${latest&&first?delta(latest.revenue,first.revenue):"비교 데이터 없음"}</small></article><article><span>${latest?.month || "선택 월"} 집행 광고비</span><strong>${display(latest?.spend,value=>format(value)+"원")}</strong><small>동일 월 집행액</small></article><article><span>${latest?.month || "선택 월"} 전환율</span><strong>${display(latest?.conversion,value=>value.toFixed(1)+"%")}</strong><small>${latest&&first?(latest.conversion-first.conversion>=0?"+":"")+(latest.conversion-first.conversion).toFixed(1)+"%p":"비교 데이터 없음"}</small></article><article><span>${latest?.month || "선택 월"} ROHS</span><strong>${display(latest?.rohs,value=>value.toFixed(0)+"%")}</strong><small>${latest&&first?(latest.rohs-first.rohs>=0?"+":"")+(latest.rohs-first.rohs).toFixed(0)+"%p":"비교 데이터 없음"}</small></article></div>${renderAdDashboard(rows)}`;
+      section.innerHTML = `<div class="custom-ad-head"><div><p>BRAND AD PERFORMANCE</p><h3>${escapeHtml(selected)} 광고 운영 성과</h3></div><span>시트 입력값 · 1월~12월 전체 추이</span></div><div class="custom-ad-kpis"><article><span>${latest?.month || "선택 월"} 광고 전환매출</span><strong>${display(latest?.revenue,value=>format(value)+"원")}</strong><small>${latest&&first?delta(latest.revenue,first.revenue):"비교 데이터 없음"}</small></article><article><span>${latest?.month || "선택 월"} 집행 광고비</span><strong>${display(latest?.spend,value=>format(value)+"원")}</strong><small>동일 월 집행액</small></article><article><span>${latest?.month || "선택 월"} 전환율</span><strong>${display(latest?.conversion,value=>value.toFixed(1)+"%")}</strong><small>${latest&&first?(latest.conversion-first.conversion>=0?"+":"")+(latest.conversion-first.conversion).toFixed(1)+"%p":"비교 데이터 없음"}</small></article><article><span>${latest?.month || "선택 월"} ROHS</span><strong>${display(latest?.rohs,value=>value.toFixed(0)+"%")}</strong><small>${latest&&first?(latest.rohs-first.rohs>=0?"+":"")+(latest.rohs-first.rohs).toFixed(0)+"%p":"비교 데이터 없음"}</small></article></div><div class="custom-ad-notes"><article><div><strong>성과판단</strong><span>${noteIndex===undefined?"입력 대기":`${noteIndex+1}월`}</span></div><p>${escapeHtml(assessment)}</p></article><article><div><strong>향후계획</strong><span>${noteIndex===undefined?"입력 대기":`${noteIndex+1}월`}</span></div><p>${escapeHtml(plan)}</p></article></div>${renderAdDashboard(rows)}`;
     }
     section.classList.toggle("is-visible", visible);
+  };
+
+  const ensureBudgetPlans = () => {
+    const panel=document.querySelector(".budget-panel");
+    if(!panel||!dashboardSnapshot)return;
+    let section=panel.querySelector(":scope > .budget-plan-live");
+    if(!section){section=document.createElement("section");section.className="budget-plan-live";panel.append(section)}
+    const rows=dashboardSnapshot.budgetPlans||[];
+    const signature=JSON.stringify(rows);
+    if(section.dataset.signature===signature)return;
+    section.dataset.signature=signature;
+    section.innerHTML=`<div class="budget-plan-live-head"><div><p>REMAINING BUDGET PLAN</p><h3>잔여예산 사용 계획</h3></div><span>시트 15~21행 연동</span></div><div class="budget-plan-live-table-wrap"><table class="budget-plan-live-table"><thead><tr><th>월</th><th>사용 계획</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${escapeHtml(row.month)}</td><td>${escapeHtml(row.plan||"입력 대기")}</td></tr>`).join("")}</tbody></table></div>`;
+  };
+
+  const knownBrands=["아메리칸솔루션","캐네디언샌드","잘싸모래","클레버메이트","브리젠 파테","포우리패드","더스트몬"];
+  const brandOf=name=>knownBrands.find(brand=>String(name||"").startsWith(brand))||String(name||"").split(/\s+/)[0];
+  const changeText=(current,previous)=>{
+    const delta=current-previous;
+    if(!previous)return current?'<span class="change-new">신규/비교 불가</span>':'<span class="change-flat">-</span>';
+    const rate=delta/Math.abs(previous)*100;
+    if(Math.abs(delta)<1)return '<span class="change-flat">- 0.0%</span>';
+    return `<span class="${delta>0?"change-up":"change-down"}">${delta>0?"▲":"▼"} ${format(Math.abs(delta))}원 (${Math.abs(rate).toFixed(1)}%)</span>`;
+  };
+  const renderMonthDetail=(target,monthIndex,title,rows)=>{
+    if(!target||!dashboardSnapshot)return;
+    if(target.nextElementSibling?.classList.contains("month-detail-live"))target.nextElementSibling.remove();
+    const section=document.createElement("section");
+    section.className="month-detail-live";
+    section.innerHTML=`<div class="month-detail-live-head"><div><p>SELECTED MONTH DETAIL</p><h3>${monthIndex+1}월 ${escapeHtml(title)}</h3></div><span>전월 대비</span></div><div class="month-detail-live-table-wrap"><table class="month-detail-live-table"><thead><tr><th>구분</th><th>${monthIndex+1}월</th><th>${monthIndex===0?"전월":"전월("+monthIndex+"월)"}</th><th>증감</th></tr></thead><tbody>${rows.map(row=>{const current=Number(row.values?.[monthIndex])||0,previous=monthIndex>0?(Number(row.values?.[monthIndex-1])||0):0;return `<tr><td>${escapeHtml(row.name)}</td><td>${format(current)}원</td><td>${monthIndex===0?"-":format(previous)+"원"}</td><td>${monthIndex===0?'<span class="change-flat">비교 월 없음</span>':changeText(current,previous)}</td></tr>`}).join("")}</tbody></table></div>`;
+    target.insertAdjacentElement("afterend",section);
+  };
+  const monthFromText=value=>{const match=String(value||"").match(/(\d{1,2})월/);return match?Number(match[1])-1:-1};
+  const clearMonthDetails=()=>document.querySelectorAll(".month-detail-live").forEach(node=>node.remove());
+  const handleChartMonthClick=event=>{
+    if(!dashboardSnapshot)return;
+    const monthlyGroup=event.target.closest(".gmv-target-chart g");
+    const monthlyChart=event.target.closest(".gmv-target-chart");
+    if(monthlyChart&&monthlyGroup){
+      const monthIndex=monthFromText(monthlyGroup.querySelector(".month-axis-label")?.textContent);
+      if(monthIndex<0)return;
+      monthlyChart.querySelectorAll("g.is-month-detail-selected").forEach(node=>node.classList.remove("is-month-detail-selected"));
+      monthlyGroup.classList.add("is-month-detail-selected");
+      renderMonthDetail(monthlyChart.closest(".chart-scroll")||monthlyChart,monthIndex,"GMV 상세 내역",[
+        {name:"로켓 GMV",values:dashboardSnapshot.rocketGmv},{name:"윙 GMV",values:dashboardSnapshot.wingGmv},{name:"총 GMV",values:dashboardSnapshot.totalGmv},{name:"GMV 목표",values:dashboardSnapshot.gmvTarget},
+      ]);
+      return;
+    }
+    const brandMonth=event.target.closest(".brand-month");
+    if(brandMonth){
+      const monthIndex=monthFromText(brandMonth.querySelector(":scope > span")?.textContent);
+      if(monthIndex<0)return;
+      const chart=brandMonth.closest(".brand-chart");
+      chart?.querySelectorAll(".brand-month.is-month-detail-selected").forEach(node=>node.classList.remove("is-month-detail-selected"));
+      brandMonth.classList.add("is-month-detail-selected");
+      const inventory=Boolean(chart?.closest(".brand-accounting-block"));
+      renderMonthDetail(chart,monthIndex,inventory?"브랜드별 재고매출 상세 내역":"브랜드별 GMV 상세 내역",inventory?dashboardSnapshot.brandAccounting:dashboardSnapshot.brands);
+      return;
+    }
+    const productMonth=event.target.closest(".product-month");
+    if(productMonth){
+      const monthIndex=monthFromText(productMonth.querySelector(":scope > strong")?.textContent);
+      if(monthIndex<0)return;
+      const chart=productMonth.closest(".product-detail-chart");
+      chart?.querySelectorAll(".product-month.is-month-detail-selected").forEach(node=>node.classList.remove("is-month-detail-selected"));
+      productMonth.classList.add("is-month-detail-selected");
+      const selected=document.querySelector(".report-brand-select")?.value?.trim()||"";
+      const inventory=chart?.previousElementSibling?.classList.contains("product-accounting-heading");
+      const source=inventory?dashboardSnapshot.productAccounting:dashboardSnapshot.products;
+      const rows=(source||[]).filter(row=>brandOf(row.name)===selected);
+      renderMonthDetail(chart,monthIndex,inventory?`${selected} 품목별 재고매출 상세 내역`:`${selected} 품목별 GMV 상세 내역`,rows);
+    }
   };
 
   const ensureEventSpendStyles = () => {
@@ -297,12 +376,12 @@
   };
 
   const apply = () => {
-    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureEventSpendPanel(); normalizeAugustAsActual(); ensureRefreshMode();
+    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureBudgetPlans(); ensureEventSpendPanel(); normalizeAugustAsActual(); ensureRefreshMode();
   };
   window.addEventListener("load", () => setTimeout(apply, 1800), {once:true});
   document.addEventListener("change", event => {
-    if (event.target.matches(".report-brand-select")) setTimeout(apply, 400);
-    if (event.target.matches(".range-filter select")) setTimeout(apply, 450);
+    if (event.target.matches(".report-brand-select")) { clearMonthDetails(); setTimeout(apply, 400); }
+    if (event.target.matches(".range-filter select")) { clearMonthDetails(); setTimeout(apply, 450); }
   });
-  document.addEventListener("click", () => setTimeout(apply, 400));
+  document.addEventListener("click", event => { handleChartMonthClick(event); setTimeout(apply, 400); });
 })();
