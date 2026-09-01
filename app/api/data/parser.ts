@@ -49,6 +49,7 @@ export type DashboardData = {
   brandOperationSummaries: string[];
   brandSalesPlans: string[];
   budgetRows: { name: string; budget: number; spent: number }[];
+  budgetPlans: { month: string; plan: string }[];
   budget: number;
   spent: number;
   accounting: {
@@ -365,6 +366,13 @@ export function parseDashboardSheets(sheets: DashboardSheets): DashboardData {
     };
   });
   const budgetTotal = expectRow(sheets.budget, 5, "합계");
+  const budgetPlans = sheets.budget
+    .slice(14, 21)
+    .map((row) => ({
+      month: textCell(row?.[0], 20),
+      plan: textCell(row?.[2]),
+    }))
+    .filter((row) => monthIndex(row.month) >= 0);
 
   const accountingInventory = expectRow(sheets.accounting, 3, "쿠팡로켓", "재고매출");
   void accountingInventory;
@@ -406,6 +414,7 @@ export function parseDashboardSheets(sheets: DashboardSheets): DashboardData {
     brandOperationSummaries: brandOperations["전체"].summaries,
     brandSalesPlans: brandOperations["전체"].plans,
     budgetRows,
+    budgetPlans,
     budget: numberCell(budgetTotal[3], "budget total KPI budget"),
     spent: numberCell(budgetTotal[4], "budget total cumulative spend"),
     accounting: {
