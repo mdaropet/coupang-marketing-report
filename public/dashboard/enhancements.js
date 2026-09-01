@@ -1,11 +1,14 @@
 (() => {
   let dashboardSnapshot = null;
+  let brandOperationsByName = {};
   Promise.all([
     fetch("/api/dashboard-data", { cache: "no-store" }).then(response => response.ok ? response.json() : Promise.reject(new Error("dashboard data"))),
     fetch("/api/monthly-operations", { cache: "no-store" }).then(response => response.ok ? response.json() : null).catch(() => null),
+    fetch("/api/brand-operations", { cache: "no-store" }).then(response => response.ok ? response.json() : null).catch(() => null),
   ])
-    .then(([payload, monthlyOperations]) => {
+    .then(([payload, monthlyOperations, brandOperations]) => {
       dashboardSnapshot = payload.data || null;
+      brandOperationsByName = brandOperations?.brands || {};
       if (dashboardSnapshot && monthlyOperations) {
         if (Array.isArray(monthlyOperations.summaries)) dashboardSnapshot.operationSummaries = monthlyOperations.summaries;
         if (Array.isArray(monthlyOperations.plans)) dashboardSnapshot.salesPlans = monthlyOperations.plans;
@@ -36,22 +39,23 @@
     .filter(Boolean);
   const operationContent = type => {
     if (!dashboardSnapshot) return { summary: ["시트 데이터 불러오는 중"], plan: ["시트 데이터 불러오는 중"] };
-    const fields = {
-      monthly: ["operationSummaries", "salesPlans"],
-      brand: ["brandOperationSummaries", "brandSalesPlans"],
-      marketing: ["marketingOperationSummaries", "marketingSalesPlans"],
-    }[type];
-    const summaries = dashboardSnapshot[fields[0]] || [];
-    const plans = dashboardSnapshot[fields[1]] || [];
+    const brand = type === "brand" ? (document.querySelector(".report-brand-select")?.value?.trim() || "전체") : "";
+    const block = type === "brand" ? brandOperationsByName[brand] : null;
+    const fields = type === "monthly"
+      ? ["operationSummaries", "salesPlans"]
+      : ["marketingOperationSummaries", "marketingSalesPlans"];
+    const summaries = type === "brand" ? (block?.summaries || []) : (dashboardSnapshot[fields[0]] || []);
+    const plans = type === "brand" ? (block?.plans || []) : (dashboardSnapshot[fields[1]] || []);
     const index = selectedIndexes()
       .filter(monthIndex => String(summaries[monthIndex] || plans[monthIndex] || "").trim())
       .at(-1);
     if (index === undefined) {
-      return { summary: ["선택 기간에 입력된 운영요약이 없습니다."], plan: ["선택 기간에 입력된 향후계획이 없습니다."] };
+      return { summary: ["선택 기간에 입력된 운영요약이 없습니다."], plan: ["선택 기간에 입력된 향후계획이 없습니다."], brand };
     }
     return {
       summary: sheetLines(summaries[index]).length ? sheetLines(summaries[index]) : ["운영요약 입력 대기"],
       plan: sheetLines(plans[index]).length ? sheetLines(plans[index]) : ["향후계획 입력 대기"],
+      brand,
     };
   };
   const ensureOperationPlan = (panel, type) => {
@@ -68,7 +72,8 @@
     const signature=JSON.stringify(content);
     if (grid.dataset.signature === signature) return;
     grid.dataset.signature=signature;
-    const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${label}</strong><span>시트 입력값</span></div>${lines.map(line=>`<p>${escapeHtml(line)}</p>`).join("")}</article>`;
+    const source=type === "brand" && content.brand ? `${escapeHtml(content.brand)} · 시트 입력값` : "시트 입력값";
+    const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${label}</strong><span>${source}</span></div>${lines.map(line=>`<p>${escapeHtml(line)}</p>`).join("")}</article>`;
     grid.innerHTML=column("운영요약",content.summary,"summary")+column("향후계획",content.plan,"plan");
   };
   const moveOperations = () => {
