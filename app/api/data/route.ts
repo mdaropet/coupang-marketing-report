@@ -13,6 +13,15 @@ const GIDS = {
   deduction: 1519343097,
   accounting: 1123039991,
 } as const;
+const SHEETS: Record<keyof DashboardSheets, { gid: number; title: string }> = {
+  monthly: { gid: GIDS.monthly, title: "쿠팡_2026년 월별 GMV 실적" },
+  brand: { gid: GIDS.brand, title: "쿠팡_로켓 브랜드별 GMV 및 재고매출" },
+  item: { gid: GIDS.item, title: "쿠팡_품목별 GMV 및 재고매출" },
+  ratio: { gid: GIDS.ratio, title: "쿠팡_GMV대비 마케팅비 비중" },
+  budget: { gid: GIDS.budget, title: "쿠팡_마케팅비 예산 집행 내역" },
+  deduction: { gid: GIDS.deduction, title: "쿠팡_매출차감행사비 내역" },
+  accounting: { gid: GIDS.accounting, title: "쿠팡_회계매출 세부내역" },
+};
 const SERVICE_ACCOUNT_EMAIL =
   process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
   "aropetsales@neural-myth-506709-f5.iam.gserviceaccount.com";
@@ -29,6 +38,9 @@ export const revalidate = 0;
 export const runtime = "nodejs";
 
 let tokenCache: { accessToken: string; expiresAt: number } | null = null;
+let sheetCache: { data: DashboardSheets; expiresAt: number } | null = null;
+let sheetRequest: Promise<DashboardSheets> | null = null;
+const SHEET_CACHE_MS = 5_000;
 
 function base64Url(value: string | Buffer) {
   return Buffer.from(value)
@@ -107,35 +119,46 @@ async function googleJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function dashboardSheets(): Promise<DashboardSheets> {
-  const metadata = await googleJson<{
-    sheets?: { properties?: { sheetId?: number; title?: string } }[];
-  }>(
-    `${GOOGLE_SHEETS_API}/${SHEET_ID}?fields=sheets(properties(sheetId,title))`,
-  );
-  const titles = new Map(
-    (metadata.sheets || []).flatMap((sheet) => {
-      const id = sheet.properties?.sheetId;
-      const title = sheet.properties?.title;
-      return typeof id === "number" && title ? [[id, title] as const] : [];
-    }),
-  );
-
-  const entries = await Promise.all(
-    Object.entries(GIDS).map(async ([key, gid]) => {
-      const title = titles.get(gid);
-      if (!title) throw new Error(`Configured Google Sheet tab was not found: ${gid}`);
-      const quotedTitle = `'${title.replace(/'/g, "''")}'`;
-      const data = await googleJson<{ values?: unknown[][] }>(
-        `${GOOGLE_SHEETS_API}/${SHEET_ID}/values/${encodeURIComponent(`${quotedTitle}!A1:Z500`)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`,
-      );
-      const rows: Row[] = (data.values || []).map((row) =>
+async function fetchDashboardSheets(): Promise<DashboardSheets> {
+  const entries = Object.entries(SHEETS) as [keyof DashboardSheets, (typeof SHEETS)[keyof DashboardSheets]][];
+  const params = new URLSearchParams({
+    majorDimension: "ROWS",
+    valueRenderOption: "FORMATTED_VALUE",
+  });
+  for (const [, sheet] of entries) {
+    const quotedTitle = `'${sheet.title.replace(/'/g, "''")}'`;
+    params.append("ranges", `${quotedTitle}!A1:Z500`);
+  }
+  const response = await googleJson<{
+    valueRanges?: { values?: unknown[][] }[];
+  }>(`${GOOGLE_SHEETS_API}/${SHEET_ID}/values:batchGet?${params.toString()}`);
+  if (response.valueRanges?.length !== entries.length) {
+    throw new Error("Google Sheets batch response is incomplete");
+  }
+  return Object.fromEntries(
+    entries.map(([key, sheet], index) => {
+      const values = response.valueRanges?.[index]?.values;
+      if (!values) throw new Error(`Configured Google Sheet tab was not found: ${sheet.gid}`);
+      const rows: Row[] = values.map((row) =>
         row.map((cell) => (cell == null ? "" : String(cell))),
       );
       return [key, rows] as const;
     }),
-  );
-  return Object.fromEntries(entries) as DashboardSheets;
+  ) as DashboardSheets;
+}
+
+async function dashboardSheets(): Promise<DashboardSheets> {
+  if (sheetCache && sheetCache.expiresAt > Date.now()) return sheetCache.data;
+  if (sheetRequest) return sheetRequest;
+  sheetRequest = fetchDashboardSheets()
+    .then((data) => {
+      sheetCache = { data, expiresAt: Date.now() + SHEET_CACHE_MS };
+      return data;
+    })
+    .finally(() => {
+      sheetRequest = null;
+    });
+  return sheetRequest;
 }
 
 export async function GET(request: Request) {
