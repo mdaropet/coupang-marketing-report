@@ -49,6 +49,29 @@
 .operation-plan-grid article.plan p::before { color:#d8890b; }
 .brand-trend-panel.report-item-summary > .operation-plan-grid { display:none; }
 
+.month-detail-live,.budget-plan-live{margin-top:16px;padding:18px;border:1px solid #d9e4f2;border-radius:14px;background:#fff;box-shadow:0 7px 18px rgba(16,32,61,.05)}
+.month-detail-live-head,.budget-plan-live-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.month-detail-live-head p,.budget-plan-live-head p{margin:0 0 4px;color:#2867f0;font-size:9px;font-weight:900;letter-spacing:.09em}
+.month-detail-live-head h3,.budget-plan-live-head h3{margin:0;color:#10203d;font-size:16px}
+.month-detail-live-head>span,.budget-plan-live-head>span{padding:5px 9px;border-radius:999px;background:#edf3ff;color:#205ac9;font-size:9px;font-weight:900}
+.month-detail-live-table-wrap,.budget-plan-live-table-wrap{overflow:auto;border:1px solid #e2e9f2;border-radius:11px}
+.month-detail-live-table,.budget-plan-live-table{width:100%;min-width:620px;border-collapse:collapse}
+.month-detail-live-table th,.month-detail-live-table td,.budget-plan-live-table th,.budget-plan-live-table td{padding:10px 12px;border-bottom:1px solid #edf1f6;text-align:right;color:#1d2a40;font-size:11px;font-variant-numeric:tabular-nums}
+.month-detail-live-table th,.budget-plan-live-table th{background:#f5f8fc;color:#526176;font-size:10px}
+.month-detail-live-table th:first-child,.month-detail-live-table td:first-child,.budget-plan-live-table th:first-child,.budget-plan-live-table td:first-child{text-align:left;font-weight:850}
+.month-detail-live-table tbody tr:last-child td,.budget-plan-live-table tbody tr:last-child td{border-bottom:0}
+.budget-plan-live-table td:nth-child(2){text-align:left;white-space:pre-wrap;line-height:1.6}
+.change-up{color:#087657;font-weight:900}.change-down{color:#c3404d;font-weight:900}.change-flat{color:#8a95a6}.change-new{color:#205ac9;font-weight:850}
+.gmv-target-chart g:has(.month-axis-label),.brand-month,.product-month{cursor:pointer}
+.gmv-target-chart g.is-month-detail-selected>rect:first-of-type{stroke:#205ac9;stroke-width:3}
+.brand-month.is-month-detail-selected,.product-month.is-month-detail-selected{outline:3px solid #8fb5ff;outline-offset:3px;border-radius:8px}
+.custom-ad-notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.custom-ad-notes article{padding:15px 17px;border:1px solid #dce6f3;border-left:4px solid #2867f0;border-radius:12px;background:#f8fbff}
+.custom-ad-notes article:nth-child(2){border-left-color:#d8890b;background:#fffaf0}
+.custom-ad-notes article>div{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.custom-ad-notes strong{color:#10203d;font-size:12px}.custom-ad-notes span{color:#718096;font-size:9px;font-weight:850}
+.custom-ad-notes p{margin:0;color:#526176;font-size:10px;font-weight:700;line-height:1.65;white-space:pre-wrap}
+
 .custom-ad-ops {
   order: 100;
   display: none;
@@ -180,3 +203,4 @@
   font-weight: 900;
   color: #10203d;
 }
+@media(max-width:760px){.custom-ad-notes{grid-template-columns:1fr}.month-detail-live,.budget-plan-live{padding:14px}.month-detail-live-head,.budget-plan-live-head{align-items:stretch;flex-direction:column}}
