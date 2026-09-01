@@ -164,6 +164,16 @@
   };
 
   const normalizeAugustAsActual = () => {
+    if (!document.getElementById("august-actual-style")) {
+      const style = document.createElement("style");
+      style.id = "august-actual-style";
+      style.textContent = `
+        .brand-chart-guide>span,.hero-panel>.gmv-chart-guide>span{font-size:0!important}
+        .brand-chart-guide>span::after{content:"9~12월 예상: 노란색 · 숫자: 선택 브랜드 월별 수치";font-size:10px}
+        .hero-panel>.gmv-chart-guide>span::after{content:"막대: GMV · 선: 비율(%) · 9~12월 예상";font-size:10px}
+      `;
+      document.head.append(style);
+    }
     const brandColors = {
       "아메리칸솔루션": "#2867f0",
       "캐네디언샌드": "#3ab6d7",
