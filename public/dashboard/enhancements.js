@@ -68,7 +68,7 @@
     const signature=JSON.stringify(content);
     if (grid.dataset.signature === signature) return;
     grid.dataset.signature=signature;
-    const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${label}</strong><span>시트 입력값</span></div>${lines.map(line=>`<p>${line}</p>`).join("")}</article>`;
+    const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${label}</strong><span>시트 입력값</span></div>${lines.map(line=>`<p>${escapeHtml(line)}</p>`).join("")}</article>`;
     grid.innerHTML=column("운영요약",content.summary,"summary")+column("향후계획",content.plan,"plan");
   };
   const moveOperations = () => {
