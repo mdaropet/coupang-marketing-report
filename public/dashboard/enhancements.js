@@ -64,6 +64,10 @@
       const before=panel.querySelector(":scope > .gmv-chart-guide, :scope > .brand-chart-guide, :scope > .marketing-operations-top, :scope > .brand-operations-top, :scope > .chart-scroll");
       before ? before.insertAdjacentElement("beforebegin",grid) : panel.prepend(grid);
     }
+    // Brand copy is owned by BrandOperationsFix, which switches the sheet
+    // block whenever the selected brand changes. Do not overwrite it here
+    // with the dashboard's overall-brand summary.
+    if (type === "brand") return;
     const content=operationContent(type);
     const signature=JSON.stringify(content);
     if (grid.dataset.signature === signature) return;
