@@ -23,28 +23,6 @@
     badge.innerHTML = "<strong>쿠팡 시트 반영본</strong><span>첨부 데이터 기준 · 미리보기</span>";
     actions.prepend(badge);
   };
-  const operationCopy = {
-    monthly: [
-      "1~7월 실적은 로켓 GMV 중심으로 안정적인 매출 흐름을 유지했습니다.",
-      "7월 프로모션과 브랜드 집중 운영으로 총 GMV가 전월 대비 개선되었습니다.",
-      "하반기는 CPC 효율 관리와 10월 집중 투자를 통해 목표 매출 달성을 추진합니다."
-    ],
-    brand: [
-      "상위 브랜드 중심의 매출 기여도를 유지하면서 신규 브랜드 성장을 병행했습니다.",
-      "브랜드별 GMV와 재고매출 차이를 점검해 행사 및 재고 운영 우선순위를 조정합니다.",
-      "하반기는 성장 가능성이 높은 품목에 광고와 프로모션을 선택적으로 집중합니다."
-    ],
-    marketing: [
-      "상반기 집행 성과를 기준으로 효율이 확인된 CPC 캠페인을 우선 유지합니다.",
-      "잔여 예산은 월별 균등 집행보다 매출 확대 가능성이 높은 시점에 집중 배분합니다.",
-      "광고비 비중과 전환 성과를 함께 관리해 GMV 성장과 비용 효율을 동시에 확보합니다."
-    ]
-  };
-  const planCopy = {
-    monthly: ["8~9월은 효율이 검증된 상품 중심으로 안정적인 GMV를 확보합니다.","10월 CPC·디스플레이 광고를 집중해 월 GMV 10억원을 추진합니다.","11~12월은 광고 효율과 재고 수준을 점검하며 수익성을 관리합니다."],
-    brand: ["상위 브랜드는 주력 SKU 품절 방지와 행사 효율을 우선 관리합니다.","잘싸모래는 대표 배너·체험단·매출차감행사를 연계해 신규 수요를 확대합니다.","저효율 브랜드는 광고비보다 상품 구성과 재고 회전 개선에 집중합니다."],
-    marketing: ["잔여 예산은 월별 균등 배분보다 매출 확대 가능성이 높은 시점에 집중합니다.","전환율과 ROHS가 확인된 CPC 캠페인을 우선 유지합니다.","집행 후 전환매출과 광고비율을 함께 점검해 다음 달 예산을 조정합니다."]
-  };
   const selectedIndexes = () => {
     const selects = [...document.querySelectorAll(".range-filter select")];
     const start = Number(selects[0]?.value ?? 0);
@@ -57,21 +35,23 @@
     .map(line => line.replace(/\t+$/g, "").trim())
     .filter(Boolean);
   const operationContent = type => {
-    if (type !== "monthly" || !dashboardSnapshot) {
-      return { summary: operationCopy[type], plan: planCopy[type], month: "" };
-    }
-    const summaries = dashboardSnapshot.operationSummaries || [];
-    const plans = dashboardSnapshot.salesPlans || [];
+    if (!dashboardSnapshot) return { summary: ["시트 데이터 불러오는 중"], plan: ["시트 데이터 불러오는 중"] };
+    const fields = {
+      monthly: ["operationSummaries", "salesPlans"],
+      brand: ["brandOperationSummaries", "brandSalesPlans"],
+      marketing: ["marketingOperationSummaries", "marketingSalesPlans"],
+    }[type];
+    const summaries = dashboardSnapshot[fields[0]] || [];
+    const plans = dashboardSnapshot[fields[1]] || [];
     const index = selectedIndexes()
       .filter(monthIndex => String(summaries[monthIndex] || plans[monthIndex] || "").trim())
       .at(-1);
     if (index === undefined) {
-      return { summary: ["선택 기간에 입력된 운영요약이 없습니다."], plan: ["선택 기간에 입력된 향후계획이 없습니다."], month: "" };
+      return { summary: ["선택 기간에 입력된 운영요약이 없습니다."], plan: ["선택 기간에 입력된 향후계획이 없습니다."] };
     }
     return {
       summary: sheetLines(summaries[index]).length ? sheetLines(summaries[index]) : ["운영요약 입력 대기"],
       plan: sheetLines(plans[index]).length ? sheetLines(plans[index]) : ["향후계획 입력 대기"],
-      month: `${index + 1}월`,
     };
   };
   const ensureOperationPlan = (panel, type) => {
@@ -88,8 +68,8 @@
     const signature=JSON.stringify(content);
     if (grid.dataset.signature === signature) return;
     grid.dataset.signature=signature;
-    const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${content.month ? `${content.month} ${label}` : label}</strong><span>시트 입력값</span></div>${lines.map(line=>`<p>${line}</p>`).join("")}</article>`;
-    grid.innerHTML=column("운영 요약",content.summary,"summary")+column("향후 계획",content.plan,"plan");
+    const column=(label,lines,tone)=>`<article class="${tone}"><div><strong>${label}</strong><span>시트 입력값</span></div>${lines.map(line=>`<p>${line}</p>`).join("")}</article>`;
+    grid.innerHTML=column("운영요약",content.summary,"summary")+column("향후계획",content.plan,"plan");
   };
   const moveOperations = () => {
     ensureOperationPlan(document.querySelector(".gmv-target-panel"),"monthly");
@@ -215,8 +195,26 @@
     heading ? heading.insertAdjacentElement("afterend", wrap) : panel.prepend(wrap);
   };
 
+  const ensureRefreshMode = () => {
+    const button = document.querySelector(".refresh-button");
+    if (!button) return;
+    button.disabled = false;
+    button.classList.remove("refreshing");
+    const title = button.querySelector("strong");
+    const note = button.querySelector("small");
+    if (title) title.textContent = "페이지 새로고침";
+    if (note) note.textContent = "새로고침 시 시트 최신값 반영";
+    if (button.dataset.reloadOnly === "true") return;
+    button.dataset.reloadOnly = "true";
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.top.location.reload();
+    }, true);
+  };
+
   const apply = () => {
-    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureEventSpendPanel();
+    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureEventSpendPanel(); ensureRefreshMode();
   };
   window.addEventListener("load", () => setTimeout(apply, 1800), {once:true});
   document.addEventListener("change", event => {
