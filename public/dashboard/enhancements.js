@@ -146,7 +146,9 @@
     const style = document.createElement("style");
     style.id = "event-spend-live-style";
     style.textContent = `
-      .event-spend-panel .event-live-wrap{margin:8px 0 18px}
+      .event-spend-panel>.panel-heading{order:1}
+      .event-spend-panel>.event-live-wrap{order:2!important;margin:8px 0 18px}
+      .event-spend-panel>.unit{order:3!important}
       .event-spend-panel .event-live-list{display:grid;gap:10px;margin-top:14px}
       .event-spend-panel .event-live-row{display:grid;grid-template-columns:150px minmax(0,1fr) 90px;align-items:center;gap:12px}
       .event-spend-panel .event-live-name{color:#526176;font-size:11px;font-weight:850}
@@ -159,6 +161,77 @@
       @media(max-width:760px){.event-spend-panel .event-live-row{grid-template-columns:110px minmax(0,1fr) 76px}.event-spend-panel .event-live-name,.event-spend-panel .event-live-value{font-size:9px}}
     `;
     document.head.append(style);
+  };
+
+  const normalizeAugustAsActual = () => {
+    const brandColors = {
+      "아메리칸솔루션": "#2867f0",
+      "캐네디언샌드": "#3ab6d7",
+      "더스트몬": "#174ea6",
+      "잘싸모래": "#dc5963",
+      "클레버메이트": "#7657d6",
+      "브리젠 파테": "#e49a28",
+      "포우리패드": "#14916f",
+    };
+
+    document.querySelectorAll(".brand-month").forEach(month => {
+      if (month.querySelector(":scope > span")?.textContent?.trim() !== "8월") return;
+      month.classList.remove("forecast-brand-month");
+      month.querySelectorAll(":scope > button").forEach(button => {
+        const title = button.getAttribute("title") || button.getAttribute("aria-label") || "";
+        const brand = Object.keys(brandColors).find(name => title.includes(name));
+        if (brand) button.style.background = brandColors[brand];
+      });
+    });
+
+    document.querySelectorAll(".spend-column").forEach(column => {
+      if (column.querySelector(":scope > span:last-child")?.textContent?.trim() !== "8월") return;
+      column.classList.remove("forecast-column");
+      column.classList.add("actual-column");
+      const period = column.querySelector(":scope > .period-mini");
+      if (period) period.textContent = "실적";
+    });
+
+    document.querySelectorAll(".sales-month").forEach(month => {
+      if (month.querySelector(".sales-month-title strong")?.textContent?.trim() !== "8월") return;
+      month.classList.remove("forecast-block");
+      month.classList.add("actual-block");
+      const period = month.querySelector(".sales-month-title span");
+      if (period) period.textContent = "실적";
+    });
+
+    document.querySelectorAll(".accounting-month").forEach(month => {
+      if (month.querySelector(":scope > strong")?.textContent?.trim() !== "8월") return;
+      month.querySelectorAll(".forecast").forEach(node => {
+        node.classList.remove("forecast");
+        node.classList.add("actual");
+      });
+      const rocket = month.querySelector(".accounting-stack > i");
+      const wing = month.querySelector(".accounting-stack > em");
+      if (rocket) rocket.style.background = "#2867f0";
+      if (wing) wing.style.background = "#9fc0ff";
+    });
+
+    document.querySelectorAll("svg .month-axis-label").forEach(label => {
+      if (label.textContent?.trim() !== "8월") return;
+      const group = label.closest("g");
+      if (!group) return;
+      group.querySelectorAll(".gmv-target-forecast-bg").forEach(node => {
+        node.classList.remove("gmv-target-forecast-bg");
+        node.classList.add("gmv-target-actual-bg");
+      });
+      group.querySelectorAll(".bar-forecast").forEach(node => {
+        const wing = node.classList.contains("wing-forecast");
+        node.classList.remove("bar-forecast", "wing-forecast");
+        node.classList.add(wing ? "bar-wing" : "bar-rocket");
+      });
+    });
+
+    document.querySelectorAll(".unit, .brand-chart-guide span, .gmv-chart-guide span").forEach(node => {
+      if (node.textContent?.includes("8~12월 예상")) {
+        node.textContent = node.textContent.replaceAll("8~12월 예상", "9~12월 예상");
+      }
+    });
   };
   const ensureEventSpendPanel = () => {
     if (!dashboardSnapshot) return;
@@ -214,7 +287,7 @@
   };
 
   const apply = () => {
-    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureEventSpendPanel(); ensureRefreshMode();
+    ensureStaticPreviewBadge(); moveOperations(); ensureAdSection(); ensureEventSpendPanel(); normalizeAugustAsActual(); ensureRefreshMode();
   };
   window.addEventListener("load", () => setTimeout(apply, 1800), {once:true});
   document.addEventListener("change", event => {
