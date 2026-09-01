@@ -1,54 +1,41 @@
 import { NextResponse } from "next/server";
+import { parseMonthlyOperations } from "../data/parser";
+import { checkRateLimit } from "../data/rate-limit";
+import { readSheetRows } from "../data/sheet-client";
 
-const SPREADSHEET_ID = "1QPX7i199rMYkYo0aXwzwjTaauJ7oWLAPworBD7VV5OQ";
-const MONTHLY_GID = "1761957984";
+const GID = 1761957984;
+const API_HEADERS = {
+  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
+};
 
-type Row = string[];
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
 
-function parseCsv(input: string): Row[] {
-  const rows: Row[] = [];
-  let row: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (let i = 0; i < input.length; i += 1) {
-    const char = input[i];
-    if (quoted) {
-      if (char === '"' && input[i + 1] === '"') { value += '"'; i += 1; }
-      else if (char === '"') quoted = false;
-      else value += char;
-    } else if (char === '"') quoted = true;
-    else if (char === ",") { row.push(value); value = ""; }
-    else if (char === "\n") { row.push(value.replace(/\r$/, "")); rows.push(row); row = []; value = ""; }
-    else value += char;
-  }
-  if (value || row.length) { row.push(value.replace(/\r$/, "")); rows.push(row); }
-  return rows;
-}
-
-const clean = (value: unknown) => String(value ?? "").trim();
-
-export async function GET() {
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${MONTHLY_GID}&range=A14:D20&_=${Date.now()}`;
-    const response = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
-    if (!response.ok) throw new Error(`Google Sheets 응답 오류: ${response.status}`);
-    const rows = parseCsv(await response.text());
-    const summaries = Array.from({ length: 12 }, () => "");
-    const plans = Array.from({ length: 12 }, () => "");
-    for (const row of rows) {
-      if (clean(row[0]) !== "쿠팡 월별 GMV") continue;
-      const match = clean(row[1]).match(/(\d{1,2})월/);
-      if (!match) continue;
-      const index = Number(match[1]) - 1;
-      if (index < 0 || index > 11) continue;
-      summaries[index] = clean(row[2]);
-      plans[index] = clean(row[3]);
-    }
+export async function GET(request: Request) {
+  const rate = checkRateLimit(request);
+  const headers = {
+    ...API_HEADERS,
+    "RateLimit-Limit": String(rate.limit),
+    "RateLimit-Remaining": String(rate.remaining),
+    "RateLimit-Reset": String(rate.resetSeconds),
+  };
+  if (!rate.allowed) {
     return NextResponse.json(
-      { summaries, plans, source: "Google Sheets A14:D20", updatedAt: new Date().toISOString() },
-      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } },
+      { error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { ...headers, "Retry-After": String(rate.resetSeconds) } },
+    );
+  }
+  try {
+    const parsed = parseMonthlyOperations(await readSheetRows(GID, "A1:Z500"));
+    return NextResponse.json(
+      { ...parsed, source: "Google Sheets", updatedAt: new Date().toISOString() },
+      { headers },
     );
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "unknown error" }, { status: 500 });
+    console.error("Monthly operations refresh failed:", error instanceof Error ? error.message : "Unknown error");
+    return NextResponse.json({ error: "원본 데이터를 불러오지 못했습니다." }, { status: 502, headers });
   }
 }
