@@ -180,16 +180,29 @@ export function parseMonthlyOperations(rows: Row[]): TextBlock {
   return { summaries, plans };
 }
 
+function operationColumns(rows: Row[], start: number, end: number, location: string) {
+  for (let index = start; index < end; index += 1) {
+    const labels = (rows[index] || []).map(normalize);
+    const summary = labels.findIndex((label) => label === "운영요약");
+    const plan = labels.findIndex((label) => label === "영업계획" || label === "향후계획");
+    if (summary >= 0 && plan >= 0) return { header: index, summary, plan };
+  }
+  throw new Error(`Required operation headers are missing in ${location}`);
+}
+
 export function parseMarketingOperations(rows: Row[]): TextBlock {
   validateGrid("ratio", rows, ["GMV 대비 마케팅비 비율", "마케팅비 운영요약 및 영업계획"]);
   const summaries = emptyText();
   const plans = emptyText();
-  for (let index = 10; index < Math.min(rows.length, 16); index += 1) {
+  const section = rows.findIndex((row) => normalize(row?.[0]) === "마케팅비 운영요약 및 영업계획");
+  if (section < 0) throw new Error("Required marketing operations section is missing");
+  const columns = operationColumns(rows, section + 1, Math.min(rows.length, section + 8), "marketing operations");
+  for (let index = columns.header + 1; index < Math.min(rows.length, columns.header + 20); index += 1) {
     const row = rows[index];
     const month = monthIndex(row?.[0]);
     if (month < 0) continue;
-    summaries[month] = textCell(row[2]);
-    plans[month] = textCell(row[5]);
+    summaries[month] = textCell(row[columns.summary]);
+    plans[month] = textCell(row[columns.plan]);
   }
   return { summaries, plans };
 }
@@ -207,12 +220,14 @@ export function parseBrandOperations(rows: Row[]): BrandOperations {
     if (!brand) continue;
     const summaries = emptyText();
     const plans = emptyText();
-    for (let next = index + 1; next < rows.length; next += 1) {
-      if (brandMarker(rows[next]?.[0])) break;
+    const end = rows.findIndex((row, rowIndex) => rowIndex > index && Boolean(brandMarker(row?.[0])));
+    const blockEnd = end < 0 ? rows.length : end;
+    const columns = operationColumns(rows, index + 1, blockEnd, `brand operations '${brand}'`);
+    for (let next = columns.header + 1; next < blockEnd; next += 1) {
       const month = monthIndex(rows[next]?.[0]);
       if (month < 0) continue;
-      summaries[month] = textCell(rows[next]?.[2]);
-      plans[month] = textCell(rows[next]?.[5]);
+      summaries[month] = textCell(rows[next]?.[columns.summary]);
+      plans[month] = textCell(rows[next]?.[columns.plan]);
     }
     brands[brand === "전체" ? "전체" : brand] = { summaries, plans };
   }
