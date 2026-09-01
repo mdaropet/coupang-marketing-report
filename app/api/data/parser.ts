@@ -30,6 +30,7 @@ export type DashboardSheets = {
 };
 
 export type DashboardData = {
+  source: "Google Sheets";
   status: string[];
   gmvTarget: number[];
   rocketGmv: number[];
@@ -367,6 +368,7 @@ export function parseDashboardSheets(sheets: DashboardSheets): DashboardData {
   const adPerformanceByBrand = Object.fromEntries(brandNames.map((name) => [name, parseAdBlock(sheets.item, name)]));
 
   const data: DashboardData = {
+    source: "Google Sheets",
     status: Array.from({ length: MONTH_COUNT }, (_, index) => {
       const value = clean(statusRow[MONTH_START + index]);
       if (value !== "실적" && value !== "예상") throw new Error(`Invalid status at monthly row 8, month ${index + 1}`);

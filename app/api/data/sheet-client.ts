@@ -8,8 +8,20 @@ const SERVICE_ACCOUNT_EMAIL =
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const READ_ONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+const SHEET_TITLES = new Map<number, string>([
+  [1761957984, "쿠팡_2026년 월별 GMV 실적"],
+  [1036898751, "쿠팡_로켓 브랜드별 GMV 및 재고매출"],
+  [1506076158, "쿠팡_품목별 GMV 및 재고매출"],
+  [607458845, "쿠팡_GMV대비 마케팅비 비중"],
+  [2000735419, "쿠팡_마케팅비 예산 집행 내역"],
+  [1519343097, "쿠팡_매출차감행사비 내역"],
+  [1123039991, "쿠팡_회계매출 세부내역"],
+]);
 
 let tokenCache: { accessToken: string; expiresAt: number } | null = null;
+const rowCache = new Map<string, { rows: Row[]; expiresAt: number }>();
+const rowRequests = new Map<string, Promise<Row[]>>();
+const ROW_CACHE_MS = 5_000;
 
 function base64Url(value: string | Buffer) {
   return Buffer.from(value)
@@ -85,14 +97,27 @@ async function googleJson<T>(url: string): Promise<T> {
 }
 
 export async function readSheetRows(gid: number, range: string): Promise<Row[]> {
-  const metadata = await googleJson<{
-    sheets?: { properties?: { sheetId?: number; title?: string } }[];
-  }>(`${GOOGLE_SHEETS_API}/${SHEET_ID}?fields=sheets(properties(sheetId,title))`);
-  const title = metadata.sheets?.find((sheet) => sheet.properties?.sheetId === gid)?.properties?.title;
+  const title = SHEET_TITLES.get(gid);
   if (!title) throw new Error("Configured Google Sheet tab was not found");
-  const quotedTitle = `'${title.replace(/'/g, "''")}'`;
-  const data = await googleJson<{ values?: unknown[][] }>(
-    `${GOOGLE_SHEETS_API}/${SHEET_ID}/values/${encodeURIComponent(`${quotedTitle}!${range}`)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`,
-  );
-  return (data.values || []).map((row) => row.map((cell) => (cell == null ? "" : String(cell))));
+  const cacheKey = `${gid}:${range}`;
+  const cached = rowCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  const pending = rowRequests.get(cacheKey);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const quotedTitle = `'${title.replace(/'/g, "''")}'`;
+    const data = await googleJson<{ values?: unknown[][] }>(
+      `${GOOGLE_SHEETS_API}/${SHEET_ID}/values/${encodeURIComponent(`${quotedTitle}!${range}`)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`,
+    );
+    const rows = (data.values || []).map((row) =>
+      row.map((cell) => (cell == null ? "" : String(cell))),
+    );
+    rowCache.set(cacheKey, { rows, expiresAt: Date.now() + ROW_CACHE_MS });
+    return rows;
+  })().finally(() => {
+    rowRequests.delete(cacheKey);
+  });
+  rowRequests.set(cacheKey, request);
+  return request;
 }
