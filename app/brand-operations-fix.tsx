@@ -17,6 +17,10 @@ export default function BrandOperationsFix() {
       .map(line => line.replace(/\t+$/g, "").trim())
       .filter(Boolean);
 
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[character] || character));
+
     const selectedIndexes = (doc: Document) => {
       const selects = [...doc.querySelectorAll<HTMLSelectElement>(".range-filter select")];
       const start = Number(selects[0]?.value ?? 0);
@@ -59,8 +63,8 @@ export default function BrandOperationsFix() {
       grid.dataset.brandSheetSignature = signature;
 
       const column = (label: string, values: string[], tone: string) =>
-        `<article class="${tone}"><div><strong>${label}</strong><span>${brand} · 시트 입력값</span></div>${values.map(value => `<p>${value}</p>`).join("")}</article>`;
-      grid.innerHTML = column("운영 요약", summaryLines, "summary") + column("향후 계획", planLines, "plan");
+        `<article class="${tone}"><div><strong>${label}</strong><span>${escapeHtml(brand)} · 시트 입력값</span></div>${values.map(value => `<p>${escapeHtml(value)}</p>`).join("")}</article>`;
+      grid.innerHTML = column("운영요약", summaryLines, "summary") + column("향후계획", planLines, "plan");
     };
 
     const attach = () => {
