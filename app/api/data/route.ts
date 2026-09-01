@@ -40,6 +40,7 @@ export const runtime = "nodejs";
 let tokenCache: { accessToken: string; expiresAt: number } | null = null;
 let sheetCache: { data: DashboardSheets; expiresAt: number } | null = null;
 let sheetRequest: Promise<DashboardSheets> | null = null;
+// Coalesce duplicate dashboard loads without serving stale data after a Sheets failure.
 const SHEET_CACHE_MS = 5_000;
 
 function base64Url(value: string | Buffer) {
